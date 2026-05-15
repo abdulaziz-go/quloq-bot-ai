@@ -1,0 +1,130 @@
+"""
+utils/i18n.py — Internationalisation and translation helper for the bot UI.
+"""
+
+from __future__ import annotations
+
+# Text strings for the bot in different languages
+# Note: In MarkdownV2, special characters like !, ., (, ) MUST be escaped with \\
+STRINGS = {
+    "en": {
+        "welcome": "👋 *Welcome to VoiceScribe AI\\!*\n\nI am the world's most advanced voice\\-to\\-text bot\\. Send me any voice message, and I will transcribe, summarize, and extract actions for you\\.\n\n👇 *Choose your language to start:*",
+        "lang_selected": "✅ *Language set to English\\!*",
+        "buy_status": "💳 *Account & Billing*\n\n👤 User ID: `{user_id}`\n🌐 Language: {lang_name}\n📅 Joined: {joined}",
+        "balance_info": "\n\n💰 *Current Balances*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n🎙 Transcribe: `{transcribe_bal}`\n📝 Summarize: `{summarize_bal}`\n🌐 Translate: `{translate_bal}`\n📌 Actions: `{extract_bal}`\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "transcribing": "⏳ Transcribing...",
+        "summarizing": "⏳ Summarizing...",
+        "extracting": "⏳ Extracting actions...",
+        "translating": "⏳ Translating...",
+        "btn_summarize": "📝 Summarize",
+        "btn_actions": "📌 Action Items",
+        "btn_translate": "🌐 Translate",
+        "btn_back": "⬅️ Back",
+        "btn_top_up": "💳 Buy Credits / Top Up",
+        "choose_target_lang": "🌐 *Choose target language for translation:*",
+        "error_generic": "❌ *An error occurred\\. Please try again later\\.*",
+        "instructions": "🚀 *How to use the bot:*\n\n1️⃣ Send any voice message or audio file\\.\n2️⃣ Wait for the transcription\\.\n3️⃣ Use the buttons below the text to summarize, extract tasks, or translate\\!",
+        "limit_reached": "⚠️ *Limit Reached\\!*\n\nYou have run out of credits for *{feature}*\\.\n\n👇 *Choose a plan below to top up your balance:*",
+        "btn_buy_more": "💳 Buy Credits",
+        "buy_request_sent": "📨 *Request Sent\\!*\n\nYour request for *{plan}* has been sent to our team\\. We will contact you shortly to complete the payment and activate your credits\\.",
+        "err_too_long_audio": "❌ *Audio too long\\!*\n\nMaximum duration per message is *20 minutes*\\. Please send shorter voice notes\\.",
+        "err_too_long_text": "❌ *Text too long\\!*\n\nThis transcript is too large to process in one go\\. Maximum allowed is *30,000 characters*\\.",
+        "buy_menu_main": "💳 *Buy Credits*\n\nSelect which feature you want to top up:",
+        "buy_menu_transcribe": "🎙 *Transcription Plans*\n\n• 60 Minutes — $1\\.00\n• 3 Hours — $2\\.50\n• 10 Hours — $7\\.00",
+        "buy_menu_summarize": "📝 *Summarization Plans*\n\n• 20 Summaries — $1\\.00\n• 100 Summaries — $4\\.00\n• 300 Summaries — $10\\.00",
+        "buy_menu_translate": "🌐 *Translation Plans*\n\n• 20 Translations — $1\\.00\n• 100 Translations — $4\\.00\n• 300 Translations — $10\\.00",
+        "buy_menu_actions": "📌 *Action Extraction Plans*\n\n• 20 Extractions — $1\\.00\n• 100 Extractions — $4\\.00\n• 300 Extractions — $10\\.00",
+        "btn_transcription": "🎙 Transcription",
+        "btn_summarization": "📝 Summarization",
+        "btn_translation": "🌐 Translation",
+        "btn_actions_extr": "📌 Action Extraction",
+        "admin_buy_request": "🚨 *NEW BUY REQUEST*\n\n👤 *User:* {name}\n🆔 *ID:* `{user_id}`\n🏷 *Username:* @{username}\n📦 *Plan:* {plan}\n\nTo grant credits, use:\n`/set_balance {user_id} {feature} {amount}`",
+        "sub_required": "🚫 *Subscription Required\\!*\\n\nTo use this bot, you must be a member of our channel: {channel}\\.\n\nPlease join and click the button below to continue\\.",
+        "btn_join_channel": "📢 Join Channel",
+        "btn_check_sub": "✅ I have joined",
+    },
+    "uz": {
+        "welcome": "👋 *VoiceScribe AI\\-ga xush kelibsiz\\!*\n\nMen dunyodagi eng ilg'or ovozli xabar botiman\\. Menga istalgan ovozli xabarni yuboring, men uni matnga aylantiraman, xulosa qilaman va vazifalarni ajratib beraman\\.",
+        "lang_selected": "✅ *Til O'zbekchaga o'rnatildi\\!*",
+        "buy_status": "💳 *Hisob va To'lovlar*\n\n👤 ID: `{user_id}`\n🌐 Til: {lang_name}\n📅 Qo'shilgan: {joined}",
+        "balance_info": "\n\n💰 *Joriy limitlar*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n🎙 Matn: `{transcribe_bal}`\n📝 Xulosa: `{summarize_bal}`\n🌐 Tarjima: `{translate_bal}`\n📌 Vazifalar: `{extract_bal}`\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "transcribing": "⏳ Matnga aylantirilmoqda...",
+        "summarizing": "⏳ Xulosa qilinmoqda...",
+        "extracting": "⏳ Vazifalar ajratilmoqda...",
+        "translating": "⏳ Tarjima qilinmoqda...",
+        "btn_summarize": "📝 Xulosa",
+        "btn_actions": "📌 Vazifalar",
+        "btn_translate": "🌐 Tarjima qilish",
+        "btn_back": "⬅️ Orqaga",
+        "btn_top_up": "💳 Limit sotib olish / To'ldirish",
+        "choose_target_lang": "🌐 *Tarjima qilish uchun tilni tanlang:*",
+        "error_generic": "❌ *Xatolik yuz berdi\\. Iltimos, keyinroq urinib ko'ring\\.*",
+        "instructions": "🚀 *Botdan foydalanish:*\n\n1️⃣ Istalgan ovozli xabar yoki audio faylni yuboring\\.\n2️⃣ Matnga aylanishini kuting\\.\n3️⃣ Xulosa qilish, vazifalarni ajratish yoki tarjima qilish uchun tugmalardan foydalaning\\!",
+        "limit_reached": "⚠️ *Limitga yetdingiz\\!*\n\nSizda *{feature}* uchun limit tugadi\\.\n\n👇 *Balansni to'ldirish uchun tarifni tanlang:*",
+        "btn_buy_more": "💳 Limit sotib olish",
+        "buy_request_sent": "📨 *So'rov yuborildi\\!*\n\n*{plan}* uchun so'rovingiz ma'murlarga yuborildi\\. Tez orada siz bilan bog'lanamiz va to'lovdan so'ng limitlarni qo'shib beramiz\\.",
+        "admin_buy_request": "🚨 *YANGI SOTIB OLISH SO'ROVI*\n\n👤 *Foydalanuvchi:* {name}\n🆔 *ID:* `{user_id}`\n🏷 *Username:* @{username}\n📦 *Plan:* {plan}\n\nLimit qo'shish uchun:\n`/set_balance {user_id} {feature} {amount}`",
+        "err_too_long_audio": "❌ *Audio juda uzun\\!*\n\nBitta xabar uchun maksimal davomiylik *20 daqiqa*\\. Iltimos, qisqaroq ovozli xabar yuboring\\.",
+        "err_too_long_text": "❌ *Matn juda uzun\\!*\n\nUshbu matn bir martada qayta ishlash uchun juda katta\\. Maksimal ruxsat etilgan miqdor *30,000 belgi*\\.",
+        "buy_menu_main": "💳 *Limit sotib olish*\n\nBalansni to'ldirmoqchi bo'lgan funksiyani tanlang:",
+        "buy_menu_transcribe": "🎙 *Transkripsiya tariflari*\n\n• 60 Daqiqa — $1\\.00\n• 3 Soat — $2\\.50\n• 10 Soat — $7\\.00",
+        "buy_menu_summarize": "📝 *Xulosa tariflari*\n\n• 20 Xulosa — $1\\.00\n• 100 Xulosa — $4\\.00\n• 300 Xulosa — $10\\.00",
+        "buy_menu_translate": "🌐 *Tarjima tariflari*\n\n• 20 Tarjima — $1\\.00\n• 100 Tarjima — $4\\.00\n• 300 Tarjima — $10\\.00",
+        "buy_menu_actions": "📌 *Vazifalar tariflari*\n\n• 20 Vazifa — $1\\.00\n• 100 Vazifa — $4\\.00\n• 300 Vazifa — $10\\.00",
+        "btn_transcription": "🎙 Transkripsiya",
+        "btn_summarization": "📝 Xulosa qilish",
+        "btn_translation": "🌐 Tarjima qilish",
+        "btn_actions_extr": "📌 Vazifalar ajratish",
+        "sub_required": "🚫 *Obuna talab qilinadi\\!*\n\nBotdan foydalanish uchun bizning kanalimizga a'zo bo'lishingiz kerak: {channel}\\.\n\nIltimos, a'zo bo'ling va davom etish uchun quyidagi tugmani bosing\\.",
+        "btn_join_channel": "📢 Kanalga a'zo bo'lish",
+        "btn_check_sub": "✅ A'zo bo'ldim",
+    },
+    "ru": {
+        "welcome": "👋 *Добро пожаловать в VoiceScribe AI\\!*\n\nЯ самый продвинутый бот для перевода голоса в текст\\. Отправьте мне любое голосовое сообщение, и я расшифрую его, сделаю краткое изложение и выделю задачи\\.",
+        "lang_selected": "✅ *Язык установлен на Русский\\!*",
+        "buy_status": "💳 *Аккаунт и Биллинг*\n\n👤 ID пользователя: `{user_id}`\n🌐 Язык: {lang_name}\n📅 Дата регистрации: {joined}",
+        "balance_info": "\n\n💰 *Текущие лимиты*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n🎙 Текст: `{transcribe_bal}`\n📝 Пересказ: `{summarize_bal}`\n🌐 Перевод: `{translate_bal}`\n📌 Задачи: `{extract_bal}`\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "transcribing": "⏳ Расшифровка...",
+        "summarizing": "⏳ Краткое изложение...",
+        "extracting": "⏳ Выделение задач...",
+        "translating": "⏳ Перевод...",
+        "btn_summarize": "📝 Пересказать",
+        "btn_actions": "📌 Список задач",
+        "btn_translate": "🌐 Перевести",
+        "btn_back": "⬅️ Назад",
+        "btn_top_up": "💳 Купить лимиты / Пополнить",
+        "choose_target_lang": "🌐 *Выберите язык для перевода:*",
+        "error_generic": "❌ *Произошла ошибка\\. Пожалуйста, попробуйте позже\\.*",
+        "instructions": "🚀 *Как пользоваться ботом:*\n\n1️⃣ Отправьте любое голосовое или аудиосообщение\\.\n2️⃣ Дождитесь расшифровки\\.\n3️⃣ Используйте кнопки для пересказа, выделения задач или перевода\\!",
+        "limit_reached": "⚠️ *Лимит исчерпан\\!*\n\nУ вас закончились лимиты для функции *{feature}*\\.\n\n👇 *Выберите тариф для пополнения баланса:*",
+        "btn_buy_more": "💳 Купить лимиты",
+        "buy_request_sent": "📨 *Запрос отправлен\\!*\n\nВаш запрос на *{plan}* был отправлен администраторам\\. Мы свяжемся с вами в ближайшее время для оплаты и активации лимитов\\.",
+        "admin_buy_request": "🚨 *НОВЫЙ ЗАПРОС НА ПОКУПКУ*\n\n👤 *Пользователь:* {name}\n🆔 *ID:* `{user_id}`\n🏷 *Username:* @{username}\n📦 *План:* {plan}\n\nЧтобы выдать лимиты, используйте:\n`/set_balance {user_id} {feature} {amount}`",
+        "err_too_long_audio": "❌ *Аудио слишком длинное\\!*\n\nМаксимальная длительность одного сообщения — *20 минут*\\. Пожалуйста, отправляйте более короткие записи\\.",
+        "err_too_long_text": "❌ *Текст слишком длинный\\!*\n\nЭтот текст слишком велик для обработки за один раз\\. Максимально допустимо *30,000 символов*\\.",
+        "buy_menu_main": "💳 *Покупка лимитов*\n\nВыберите функцию, баланс которой хотите пополнить:",
+        "buy_menu_transcribe": "🎙 *Тарифы на расшифровку*\n\n• 60 Минут — $1\\.00\n• 3 Часа — $2\\.50\n• 10 Часов — $7\\.00",
+        "buy_menu_summarize": "📝 *Тарифы на пересказ*\n\n• 20 Пересказов — $1\\.00\n• 100 Пересказов — $4\\.00\n• 300 Пересказов — $10\\.00",
+        "buy_menu_translate": "🌐 *Тарифы на перевод*\n\n• 20 Переводов — $1\\.00\n• 100 Переводов — $4\\.00\n• 300 Переводов — $10\\.00",
+        "buy_menu_actions": "📌 *Тарифы на задачи*\n\n• 20 Выделений — $1\\.00\n• 100 Выделений — $4\\.00\n• 300 Выделений — $10\\.00",
+        "btn_transcription": "🎙 Расшифровка",
+        "btn_summarization": "📝 Пересказ",
+        "btn_translation": "🌐 Перевод",
+        "btn_actions_extr": "📌 Выделение задач",
+        "sub_required": "🚫 *Требуется подписка\\!*\n\nЧтобы использовать этого бота, вы должны быть участником нашего канала: {channel}\\.\n\nПожалуйста, подпишитесь и нажмите кнопку ниже, чтобы продолжить\\.",
+        "btn_join_channel": "📢 Подписаться на канал",
+        "btn_check_sub": "✅ Я подписался",
+    },
+}
+
+def get_text(key: str, lang: str = "en", **kwargs) -> str:
+    """Get localized string by key and language."""
+    text = STRINGS.get(lang, STRINGS["en"]).get(key, STRINGS["en"][key])
+    if kwargs:
+        return text.format(**kwargs)
+    return text
+
+def get_lang_name(lang: str) -> str:
+    """Get human readable language name."""
+    names = {"uz": "O'zbek", "ru": "Русский", "en": "English"}
+    return names.get(lang, "English")

@@ -1,0 +1,6 @@
+python-telegram-bot==21.6
+google-genai
+aiosqlite==0.20.0
+python-dotenv==1.0.1
+aiofiles==23.2.1
+httpx==0.27.0
