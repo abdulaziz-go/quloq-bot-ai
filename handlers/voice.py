@@ -41,6 +41,7 @@ def _build_keyboard(message_id: int, chat_id: int, lang: str) -> InlineKeyboardM
         ],
         [
             InlineKeyboardButton(get_text("btn_translate", lang), callback_data=f"trans_menu:{key}"),
+            InlineKeyboardButton(get_text("btn_tts", lang), callback_data=f"tts:{key}"),
         ]
     ]
     return InlineKeyboardMarkup(buttons)
@@ -107,7 +108,14 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         tg_file = await context.bot.get_file(tg_media.file_id)
         
         result = await transcribe_telegram_file(tg_file, file_name, duration)
-        await log_usage(user.id, "transcribe", tokens=result.tokens, duration_sec=duration)
+        await log_usage(
+            user.id,
+            "transcribe",
+            tokens=result.tokens,
+            duration_sec=duration,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens
+        )
         await deduct_balance(user.id, "transcribe", amount=int(duration))
         await save_transcript(message.message_id, message.chat_id, user.id, result.text, result.language, duration)
 

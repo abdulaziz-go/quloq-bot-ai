@@ -44,6 +44,8 @@ class ActionItems:
     deadlines: list[str] = field(default_factory=list)
     questions: list[str] = field(default_factory=list)
     tokens: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
 
     @property
     def is_empty(self) -> bool:
@@ -72,7 +74,14 @@ async def extract_actions(transcript: str) -> ActionItems:
     # Extract text parts manually to avoid warnings about non-text parts (like thought_signature)
     text_parts = [part.text for part in response.candidates[0].content.parts if part.text]
     response_text = "".join(text_parts).strip() if text_parts else ""
-    tokens = response.usage_metadata.total_token_count if response.usage_metadata else 0
+    
+    tokens = 0
+    input_tokens = 0
+    output_tokens = 0
+    if response.usage_metadata:
+        tokens = response.usage_metadata.total_token_count
+        input_tokens = response.usage_metadata.prompt_token_count
+        output_tokens = response.usage_metadata.candidates_token_count
 
     # Robust JSON cleaning
     if "```" in response_text:
@@ -91,10 +100,12 @@ async def extract_actions(transcript: str) -> ActionItems:
             deadlines=data.get("deadlines", []),
             questions=data.get("questions", []),
             tokens=tokens,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
     except (json.JSONDecodeError, AttributeError) as exc:
         logger.error("Failed to parse action JSON: %s", exc)
-        result = ActionItems(tokens=tokens)
+        result = ActionItems(tokens=tokens, input_tokens=input_tokens, output_tokens=output_tokens)
 
     logger.info(
         "Extracted %d tasks, %d deadlines, %d questions. Tokens=%d",

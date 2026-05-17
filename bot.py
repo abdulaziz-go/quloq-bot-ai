@@ -33,6 +33,9 @@ from handlers.callbacks import (
     callback_buy_menu,
     callback_buy_plan,
     callback_admin_chart,
+    callback_tts,
+    callback_tts_select,
+    callback_tts_preview,
 )
 from handlers.commands import (
     cmd_help,
@@ -43,8 +46,10 @@ from handlers.commands import (
     cmd_user,
     cmd_set_balance,
     cmd_db_dump,
+    cmd_tts,
 )
 from handlers.voice import handle_voice
+from handlers.text import handle_text
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -76,6 +81,7 @@ async def post_init(application: Application) -> None:
         BotCommand("start",  "🏠 Welcome screen & instructions"),
         BotCommand("help",   "📖 How to use the bot"),
         BotCommand("status", "👤 Check your plan & language"),
+        BotCommand("tts",    "🔊 Convert text to speech"),
     ])
     
     # Show admin commands ONLY to admins in their menu
@@ -84,6 +90,7 @@ async def post_init(application: Application) -> None:
         BotCommand("start",     "🏠 Welcome screen & instructions"),
         BotCommand("help",      "📖 How to use the bot"),
         BotCommand("buy",       "💳 Balance & Buy Credits"),
+        BotCommand("tts",       "🔊 Convert text to speech"),
         BotCommand("analytics", "📊 [Admin] View usage statistics"),
         BotCommand("users",     "👥 [Admin] View total users"),
         BotCommand("user",      "🔍 [Admin] Search for a user"),
@@ -115,22 +122,27 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("help",   cmd_help))
     app.add_handler(CommandHandler("buy",    cmd_buy))
     app.add_handler(CommandHandler("status", cmd_buy))
+    app.add_handler(CommandHandler("tts",    cmd_tts))
     app.add_handler(CommandHandler("set_balance", cmd_set_balance))
     app.add_handler(CommandHandler("analytics", cmd_analytics))
     app.add_handler(CommandHandler("users", cmd_users))
     app.add_handler(CommandHandler("user", cmd_user))
     app.add_handler(CommandHandler("db_dump", cmd_db_dump))
 
-    # ── Audio ─────────────────────────────────────────────────────────────────
+    # ── Audio & Direct Text (TTS) ─────────────────────────────────────────────
     audio_filter = filters.VOICE | filters.AUDIO | filters.VIDEO_NOTE | filters.VIDEO
     app.add_handler(MessageHandler(audio_filter, handle_voice))
-
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+ 
     # ── Callbacks ─────────────────────────────────────────────────────────────
     app.add_handler(CallbackQueryHandler(callback_set_lang,    pattern=r"^lang:"))
     app.add_handler(CallbackQueryHandler(callback_summarize,   pattern=r"^summarize:"))
     app.add_handler(CallbackQueryHandler(callback_actions,     pattern=r"^actions:"))
     app.add_handler(CallbackQueryHandler(callback_translate_menu, pattern=r"^trans_menu:"))
     app.add_handler(CallbackQueryHandler(callback_translate_exec, pattern=r"^trans:"))
+    app.add_handler(CallbackQueryHandler(callback_tts,           pattern=r"^tts:"))
+    app.add_handler(CallbackQueryHandler(callback_tts_select,    pattern=r"^tts_sel:"))
+    app.add_handler(CallbackQueryHandler(callback_tts_preview,   pattern=r"^tts_prev:"))
     app.add_handler(CallbackQueryHandler(callback_back_to_main, pattern=r"^back:"))
     app.add_handler(CallbackQueryHandler(callback_copy_actions, pattern=r"^copy:"))
     app.add_handler(CallbackQueryHandler(callback_check_sub,    pattern=r"^check_sub$"))

@@ -27,7 +27,11 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not user:
         return
 
-    await get_or_create_user(user.id, user.username, user.first_name)
+    referrer = "(direct)"
+    if context.args:
+        referrer = str(context.args[0])
+
+    await get_or_create_user(user.id, user.username, user.first_name, referrer)
 
     # Use 'en' as temporary for the very first welcome if no lang set
     lang = await get_user_language(user.id)
@@ -107,6 +111,7 @@ async def cmd_buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         summarize_bal=f"{db_user.get('balance_summarize_req', 0)} req",
         translate_bal=f"{db_user.get('balance_translate_req', 0)} req",
         extract_bal=f"{db_user.get('balance_extract_req', 0)} req",
+        tts_bal=f"{db_user.get('balance_tts_req', 0)} req",
     )
 
     text = get_text(
@@ -125,13 +130,45 @@ async def cmd_buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
 
 
+@subscription_required
+async def cmd_tts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Prompt the user to enter text for Text-to-Speech voiceover generation."""
+    user = update.effective_user
+    if not user:
+        return
+
+    from database.users import check_balance, get_user_language
+    lang = await get_user_language(user.id)
+
+    # 1. Check if user has sufficient TTS request balance
+    if not await check_balance(user.id, "tts"):
+        await update.message.reply_text(
+            get_text("limit_reached", lang, feature="Text-to-Speech"),
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(get_text("btn_buy_more", lang), callback_data="buy_menu:tts")
+            ]])
+        )
+        return
+
+    # 2. Set the user state to waiting for TTS text
+    context.user_data["state"] = "waiting_for_tts_text"
+
+    # 3. Prompt user for text
+    await update.message.reply_text(
+        get_text("prompt_tts_text", lang),
+        parse_mode="MarkdownV2"
+    )
+
+
 @admin_only
+
 async def cmd_set_balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Usage: /set_balance <user_id> <feature> <amount>"""
     if len(context.args) < 3:
         await update.message.reply_text(
             "Usage: `/set_balance <user_id> <feature> <amount>`\n\n"
-            "Features: `transcribe`, `summarize`, `translate`, `actions`\n"
+            "Features: `transcribe`, `summarize`, `translate`, `actions`, `tts`\n"
             "Example: `/set_balance 123456 transcribe 3600` \\(adds 1 hour\\)",
             parse_mode="MarkdownV2",
         )
@@ -153,6 +190,20 @@ async def cmd_set_balance(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     success = await add_balance(target_id, feature, amount)
     if success:
+        if amount > 0:
+            from database.users import log_purchase
+            revenue_uzs = 0
+            if feature == "transcribe":
+                revenue_uzs = int((amount / 3600.0) * 10000)
+            else:
+                if amount <= 20:
+                    revenue_uzs = amount * 500
+                elif amount <= 100:
+                    revenue_uzs = amount * 400
+                else:
+                    revenue_uzs = amount * 333
+            await log_purchase(target_id, feature, amount, revenue_uzs)
+
         await update.message.reply_text(
             f"✅ Updated *{feature}* balance for `{target_id}` by `{amount}` units\\.",
             parse_mode="MarkdownV2",
@@ -163,28 +214,85 @@ async def cmd_set_balance(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 @admin_only
 async def cmd_analytics(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    from database.users import get_analytics
+    from database.users import get_daily_summary
     
-    daily = await get_analytics(1)
-    weekly = await get_analytics(7)
-    monthly = await get_analytics(30)
+    data = await get_daily_summary()
     
-    # Rough cost estimate based on Gemini 3.1 Flash ($0.15 / 1M tokens)
-    def calc_cost(tokens):
-        return (tokens / 1_000_000) * 0.15
+    def format_tokens(n: int) -> str:
+        if n >= 1_000_000:
+            val = n / 1_000_000
+            return f"{val:.2f}M"
+        elif n >= 1000:
+            val = n / 1000
+            return f"{val:.1f}K"
+        return str(n)
         
+    total_sec = data["total_audio_sec"]
+    minutes = int(total_sec // 60)
+    seconds = int(total_sec % 60)
+    audio_length_str = f"{minutes}m {seconds}s"
+    
+    total_tokens = data["input_tokens"] + data["output_tokens"]
+    input_cost = (data["input_tokens"] / 1_000_000.0) * 1.0
+    output_cost = (data["output_tokens"] / 1_000_000.0) * 2.5
+    total_cost = input_cost + output_cost
+    
+    from datetime import datetime, timedelta
+    uz_now = datetime.utcnow() + timedelta(hours=5)
+    day_num = uz_now.strftime("%d")
+    date_str = f"{uz_now.month}/{uz_now.day}/{uz_now.year}"
+    
+    credits_sold_parts = []
+    for item in data["credits_sold"]:
+        feat = item["feature"]
+        amt = item["amount"]
+        if feat == "transcribe":
+            hrs = amt // 3600
+            mins = (amt % 3600) // 60
+            part = ""
+            if hrs > 0:
+                part += f"{hrs}h"
+            if mins > 0:
+                part += f" {mins}m"
+            if not part:
+                part = f"{amt}s"
+            credits_sold_parts.append(part.strip())
+        else:
+            feat_name = {
+                "tts": "TTS",
+                "summarize": "Summaries",
+                "translate": "Translations",
+                "actions": "Tasks",
+            }.get(feat, feat.capitalize())
+            credits_sold_parts.append(f"{amt} {feat_name}")
+            
+    credits_sold_str = ", ".join(credits_sold_parts) if credits_sold_parts else "None"
+    
     text = (
-        "📊 *Bot Analytics Dashboard*\n\n"
-        "*Past 24 Hours*\n"
-        f"• Requests: {daily['total_requests']}\n"
-        f"• Audio: {daily['total_duration']:.1f} sec\n"
-        f"• Tokens: {daily['total_tokens']:,} \\(~${calc_cost(daily['total_tokens']):.4f}\\)\n\n"
-        "*Past 30 Days*\n"
-        f"• Requests: {monthly['total_requests']}\n"
-        f"• Audio: {monthly['total_duration']:.1f} sec\n"
-        f"• Tokens: {monthly['total_tokens']:,} \\(~${calc_cost(monthly['total_tokens']):.2f}\\)\n\n"
-        "📈 *Visual Charts*"
+        f"📊 *DAILY SUMMARY REPORT*\n"
+        f"📅 *Date:* {date_str} (Day {day_num})\n\n"
+        f"👥 *User Activity*\n"
+        f"• New Signups: *{data['new_users']}*\n"
+        f"• Daily Active Users (DAU): *{data['dau']}*\n"
+        f"• Total Registered Users: *{data['total_users']}*\n\n"
+        f"🎙 *Voice Transcription*\n"
+        f"• Total Transcriptions: *{data['total_transcriptions']}*\n"
+        f"• Total Audio Length: *{audio_length_str}*\n\n"
+        f"🤖 *AI Engine Usage*\n"
+        f"• Input Tokens: *{format_tokens(data['input_tokens'])}* (~${input_cost:.2f})\n"
+        f"• Output Tokens: *{format_tokens(data['output_tokens'])}* (~${output_cost:.2f})\n"
+        f"• Total Tokens: *{format_tokens(total_tokens)}* (~${total_cost:.2f})\n\n"
+        f"🗣 *Text-to-Speech (TTS)*\n"
+        f"• Generations: *{data['tts_gens']}*\n"
+        f"• Characters Synthesized: *{format_tokens(data['tts_chars'])}*\n\n"
+        f"💳 *Financials & Purchases*\n"
+        f"• Successful Sales: *{data['purchase_count']}*\n"
+        f"• Total Revenue: *{data['revenue_uzs']:,} UZS*\n"
+        f"• Credits Distributed: *{credits_sold_str}*"
     )
+    
+    from utils.formatting import _escape
+    escaped_text = _escape(text).replace("\\*", "*")
     
     keyboard = InlineKeyboardMarkup([
         [
@@ -202,11 +310,7 @@ async def cmd_analytics(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         ]
     ])
     
-    # Escape dots, hyphens etc for MarkdownV2
-    from utils.formatting import _escape
-    text = _escape(text).replace("\\*", "*") 
-    
-    await update.message.reply_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
+    await update.message.reply_text(escaped_text, parse_mode="MarkdownV2", reply_markup=keyboard)
 
 
 @admin_only

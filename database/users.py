@@ -11,20 +11,21 @@ async def get_or_create_user(
     user_id: int,
     username: str | None,
     first_name: str | None,
+    referrer: str = '(direct)',
 ) -> dict:
-    """Upsert a user record and return it."""
+    """Upsert a user record and return it, preserving first referrer."""
     async with aiosqlite.connect(get_db_path()) as db:
         db.row_factory = aiosqlite.Row
         await db.execute(
             """
-            INSERT INTO users (user_id, username, first_name)
-            VALUES (?, ?, ?)
+            INSERT INTO users (user_id, username, first_name, referrer)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 username   = excluded.username,
                 first_name = excluded.first_name,
                 updated_at = datetime('now')
             """,
-            (user_id, username, first_name),
+            (user_id, username, first_name, referrer),
         )
         await db.commit()
         async with db.execute(
@@ -129,11 +130,32 @@ async def get_transcript(message_id: int, chat_id: int) -> dict | None:
 
 # ── Usage / Analytics ──────────────────────────────────────────────────────────
 
-async def log_usage(user_id: int, action: str, tokens: int = 0, duration_sec: float = 0.0) -> None:
+async def log_usage(
+    user_id: int, 
+    action: str, 
+    tokens: int = 0, 
+    duration_sec: float = 0.0,
+    input_tokens: int = 0,
+    output_tokens: int = 0
+) -> None:
     async with aiosqlite.connect(get_db_path()) as db:
         await db.execute(
-            "INSERT INTO usage_log (user_id, action, tokens, duration_sec) VALUES (?, ?, ?, ?)",
-            (user_id, action, tokens, duration_sec),
+            """
+            INSERT INTO usage_log 
+            (user_id, action, tokens, duration_sec, input_tokens, output_tokens) 
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (user_id, action, tokens, duration_sec, input_tokens, output_tokens),
+        )
+        await db.commit()
+
+
+async def log_purchase(user_id: int, feature: str, amount: int, revenue_uzs: int) -> None:
+    """Log a purchase transaction in the purchases table."""
+    async with aiosqlite.connect(get_db_path()) as db:
+        await db.execute(
+            "INSERT INTO purchases (user_id, feature, amount, revenue_uzs) VALUES (?, ?, ?, ?)",
+            (user_id, feature, amount, revenue_uzs),
         )
         await db.commit()
 
@@ -189,6 +211,7 @@ async def check_balance(user_id: int, feature: str, requirement: int = 1) -> boo
             "summarize": "balance_summarize_req",
             "translate": "balance_translate_req",
             "actions": "balance_extract_req",
+            "tts": "balance_tts_req",
         }.get(feature)
         
         if not column:
@@ -211,6 +234,7 @@ async def deduct_balance(user_id: int, feature: str, amount: int = 1) -> None:
             "summarize": "balance_summarize_req",
             "translate": "balance_translate_req",
             "actions": "balance_extract_req",
+            "tts": "balance_tts_req",
         }.get(feature)
         
         if not column:
@@ -231,6 +255,7 @@ async def add_balance(user_id: int, feature: str, amount: int) -> bool:
             "summarize": "balance_summarize_req",
             "translate": "balance_translate_req",
             "actions": "balance_extract_req",
+            "tts": "balance_tts_req",
         }.get(feature)
         
         if not column:
@@ -245,7 +270,7 @@ async def add_balance(user_id: int, feature: str, amount: int) -> bool:
 
 
 async def get_user_growth_data(period: str = "daily") -> list[dict]:
-    """Returns user join counts grouped by hour, day, month, or year."""
+    """Returns user join counts grouped by hour, day, month, or year (converted to Uzbekistan Time +5 hours)."""
     fmt = {
         "hourly": "%Y-%m-%d %H:00",
         "daily": "%Y-%m-%d",
@@ -256,7 +281,7 @@ async def get_user_growth_data(period: str = "daily") -> list[dict]:
     async with aiosqlite.connect(get_db_path()) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            f"SELECT strftime(?, created_at) as label, COUNT(*) as count FROM users GROUP BY label ORDER BY label DESC LIMIT 15",
+            f"SELECT strftime(?, created_at, '+5 hours') as label, COUNT(*) as count FROM users GROUP BY label ORDER BY label DESC LIMIT 15",
             (fmt,)
         ) as cur:
             rows = await cur.fetchall()
@@ -264,7 +289,7 @@ async def get_user_growth_data(period: str = "daily") -> list[dict]:
 
 
 async def get_usage_stats_data(period: str = "daily") -> list[dict]:
-    """Returns token usage sums grouped by hour, day, month, or year."""
+    """Returns token usage sums grouped by hour, day, month, or year (converted to Uzbekistan Time +5 hours)."""
     fmt = {
         "hourly": "%Y-%m-%d %H:00",
         "daily": "%Y-%m-%d",
@@ -275,8 +300,130 @@ async def get_usage_stats_data(period: str = "daily") -> list[dict]:
     async with aiosqlite.connect(get_db_path()) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            f"SELECT strftime(?, created_at) as label, SUM(tokens) as total_tokens FROM usage_log GROUP BY label ORDER BY label DESC LIMIT 15",
+            f"SELECT strftime(?, created_at, '+5 hours') as label, SUM(tokens) as total_tokens FROM usage_log GROUP BY label ORDER BY label DESC LIMIT 15",
             (fmt,)
         ) as cur:
             rows = await cur.fetchall()
             return [dict(r) for r in reversed(rows)]
+
+
+async def get_daily_summary() -> dict:
+    """Collects comprehensive daily analytics for Uzbekistan Time (UTC+5)."""
+    async with aiosqlite.connect(get_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        
+        # 1. New Users
+        async with db.execute(
+            "SELECT COUNT(*) as count FROM users WHERE date(created_at, '+5 hours') = date('now', '+5 hours')"
+        ) as cur:
+            row = await cur.fetchone()
+            new_users = row["count"] if row else 0
+
+        # 2. Referrers
+        async with db.execute(
+            """
+            SELECT referrer, COUNT(*) as count 
+            FROM users 
+            WHERE date(created_at, '+5 hours') = date('now', '+5 hours') 
+            GROUP BY referrer 
+            ORDER BY count DESC
+            """
+        ) as cur:
+            rows = await cur.fetchall()
+            referrers = [dict(r) for r in rows]
+
+        # 3. Total Transcriptions
+        async with db.execute(
+            "SELECT COUNT(*) as count FROM usage_log WHERE action = 'transcribe' AND date(created_at, '+5 hours') = date('now', '+5 hours')"
+        ) as cur:
+            row = await cur.fetchone()
+            total_transcriptions = row["count"] if row else 0
+
+        # 4. Total Audio Length
+        async with db.execute(
+            "SELECT SUM(duration_sec) as total_sec FROM usage_log WHERE action = 'transcribe' AND date(created_at, '+5 hours') = date('now', '+5 hours')"
+        ) as cur:
+            row = await cur.fetchone()
+            total_audio_sec = row["total_sec"] if (row and row["total_sec"]) else 0.0
+
+        # 5. Daily Active Users (DAU)
+        async with db.execute(
+            "SELECT COUNT(DISTINCT user_id) as count FROM usage_log WHERE date(created_at, '+5 hours') = date('now', '+5 hours')"
+        ) as cur:
+            row = await cur.fetchone()
+            dau = row["count"] if row else 0
+
+        # 6. Total Users
+        async with db.execute("SELECT COUNT(*) as count FROM users") as cur:
+            row = await cur.fetchone()
+            total_users = row["count"] if row else 0
+
+        # 7. AI Token Usage
+        async with db.execute(
+            """
+            SELECT 
+                SUM(CASE WHEN action != 'tts' THEN (CASE WHEN input_tokens > 0 THEN input_tokens ELSE CAST(tokens * 0.8 AS INTEGER) END) ELSE 0 END) as input_t,
+                SUM(CASE WHEN action != 'tts' THEN (CASE WHEN output_tokens > 0 THEN output_tokens ELSE CAST(tokens * 0.2 AS INTEGER) END) ELSE 0 END) as output_t
+            FROM usage_log
+            WHERE date(created_at, '+5 hours') = date('now', '+5 hours')
+            """
+        ) as cur:
+            row = await cur.fetchone()
+            input_tokens = row["input_t"] if (row and row["input_t"]) else 0
+            output_tokens = row["output_t"] if (row and row["output_t"]) else 0
+
+        # 8. TTS Usage
+        async with db.execute(
+            """
+            SELECT 
+                COUNT(*) as gens,
+                SUM(tokens) as chars
+            FROM usage_log
+            WHERE action = 'tts' AND date(created_at, '+5 hours') = date('now', '+5 hours')
+            """
+        ) as cur:
+            row = await cur.fetchone()
+            tts_gens = row["gens"] if (row and row["gens"]) else 0
+            tts_chars = row["chars"] if (row and row["chars"]) else 0
+
+        # 9. Purchases
+        async with db.execute(
+            """
+            SELECT 
+                COUNT(*) as count,
+                SUM(revenue_uzs) as revenue
+            FROM purchases
+            WHERE date(created_at, '+5 hours') = date('now', '+5 hours')
+            """
+        ) as cur:
+            row = await cur.fetchone()
+            purchase_count = row["count"] if (row and row["count"]) else 0
+            revenue_uzs = row["revenue"] if (row and row["revenue"]) else 0
+
+        # 10. Credits Sold details
+        async with db.execute(
+            """
+            SELECT feature, SUM(amount) as amount
+            FROM purchases
+            WHERE date(created_at, '+5 hours') = date('now', '+5 hours')
+            GROUP BY feature
+            """
+        ) as cur:
+            rows = await cur.fetchall()
+            credits_sold = [dict(r) for r in rows]
+
+        return {
+            "new_users": new_users,
+            "referrers": referrers,
+            "total_transcriptions": total_transcriptions,
+            "total_audio_sec": total_audio_sec,
+            "dau": dau,
+            "total_users": total_users,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "tts_gens": tts_gens,
+            "tts_chars": tts_chars,
+            "purchase_count": purchase_count,
+            "revenue_uzs": revenue_uzs,
+            "credits_sold": credits_sold,
+        }

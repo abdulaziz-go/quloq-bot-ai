@@ -44,6 +44,12 @@ async def translate_text(text: str, target_lang: str) -> tuple[str, int]:
     # Extract text parts manually to avoid warnings about non-text parts (like thought_signature)
     text_parts = [part.text for part in response.candidates[0].content.parts if part.text]
     translation = "".join(text_parts).strip() if text_parts else "Failed to generate translation due to API filter."
-    tokens = response.usage_metadata.total_token_count if response.usage_metadata else 0
+    tokens = 0
+    input_tokens = 0
+    output_tokens = 0
+    if response.usage_metadata:
+        tokens = response.usage_metadata.total_token_count
+        input_tokens = response.usage_metadata.prompt_token_count
+        output_tokens = response.usage_metadata.candidates_token_count
     logger.info("Translation complete (%d chars, %d tokens).", len(translation), tokens)
-    return translation, tokens
+    return translation, tokens, input_tokens, output_tokens

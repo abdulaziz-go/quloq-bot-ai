@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS users (
     balance_summarize_req  INTEGER DEFAULT 20,
     balance_translate_req  INTEGER DEFAULT 20,
     balance_extract_req    INTEGER DEFAULT 20,
+    balance_tts_req        INTEGER DEFAULT 100,
+    referrer    TEXT DEFAULT '(direct)',
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -46,6 +48,19 @@ CREATE TABLE IF NOT EXISTS usage_log (
     action       TEXT    NOT NULL,   -- 'transcribe' | 'summarize' | 'actions' | 'translate'
     tokens       INTEGER DEFAULT 0,
     duration_sec REAL    DEFAULT 0.0,
+    input_tokens  INTEGER DEFAULT 0,
+    output_tokens INTEGER DEFAULT 0,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+"""
+
+CREATE_PURCHASES = """
+CREATE TABLE IF NOT EXISTS purchases (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER NOT NULL,
+    feature      TEXT    NOT NULL,
+    amount       INTEGER NOT NULL,
+    revenue_uzs  INTEGER DEFAULT 0,
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
@@ -58,6 +73,7 @@ async def init_db() -> None:
         await db.execute(CREATE_USERS)
         await db.execute(CREATE_TRANSCRIPTS)
         await db.execute(CREATE_USAGE_LOG)
+        await db.execute(CREATE_PURCHASES)
         
         # Migration: Add 'language' column if it doesn't exist
         try:
@@ -65,12 +81,19 @@ async def init_db() -> None:
         except aiosqlite.OperationalError:
             pass  # Column already exists
 
+        # Migration: Add 'referrer' column if it doesn't exist
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN referrer TEXT DEFAULT '(direct)'")
+        except aiosqlite.OperationalError:
+            pass
+
         # Migration: Add balance columns for existing users
         balance_cols = [
             ("balance_transcribe_sec", "INTEGER DEFAULT 3600"),
             ("balance_summarize_req", "INTEGER DEFAULT 20"),
             ("balance_translate_req", "INTEGER DEFAULT 20"),
             ("balance_extract_req", "INTEGER DEFAULT 20"),
+            ("balance_tts_req", "INTEGER DEFAULT 100"),
         ]
         for col_name, col_def in balance_cols:
             try:
@@ -89,6 +112,15 @@ async def init_db() -> None:
         except aiosqlite.OperationalError:
             pass
 
+        try:
+            await db.execute("ALTER TABLE usage_log ADD COLUMN input_tokens INTEGER DEFAULT 0")
+        except aiosqlite.OperationalError:
+            pass
+
+        try:
+            await db.execute("ALTER TABLE usage_log ADD COLUMN output_tokens INTEGER DEFAULT 0")
+        except aiosqlite.OperationalError:
+            pass
             
         await db.commit()
 
