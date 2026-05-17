@@ -7,9 +7,77 @@ Provides free, fast, high-quality voice synthesis for English, Russian, and Uzbe
 from __future__ import annotations
 
 import logging
+import re
 import edge_tts
 
 logger = logging.getLogger(__name__)
+
+# Uzbek Cyrillic → Latin transliteration table (official 1995 Uzbek Latin alphabet)
+_UZ_CYR_TO_LAT: dict[str, str] = {
+    'А': 'A',  'а': 'a',
+    'Б': 'B',  'б': 'b',
+    'В': 'V',  'в': 'v',
+    'Г': 'G',  'г': 'g',
+    'Ғ': "G'", 'ғ': "g'",
+    'Д': 'D',  'д': 'd',
+    'Е': 'Ye', 'е': 'ye',
+    'Ё': 'Yo', 'ё': 'yo',
+    'Ж': 'J',  'ж': 'j',
+    'З': 'Z',  'з': 'z',
+    'И': 'I',  'и': 'i',
+    'Й': 'Y',  'й': 'y',
+    'К': 'K',  'к': 'k',
+    'Қ': 'Q',  'қ': 'q',
+    'Л': 'L',  'л': 'l',
+    'М': 'M',  'м': 'm',
+    'Н': 'N',  'н': 'n',
+    'О': 'O',  'о': 'o',
+    'П': 'P',  'п': 'p',
+    'Р': 'R',  'р': 'r',
+    'С': 'S',  'с': 's',
+    'Т': 'T',  'т': 't',
+    'У': 'U',  'у': 'u',
+    'Ф': 'F',  'ф': 'f',
+    'Х': 'X',  'х': 'x',
+    'Ц': 'Ts', 'ц': 'ts',
+    'Ч': 'Ch', 'ч': 'ch',
+    'Ш': 'Sh', 'ш': 'sh',
+    'Щ': 'Sh', 'щ': 'sh',
+    'Ъ': "'",  'ъ': "'",
+    'Ы': 'I',  'ы': 'i',
+    'Ь': '',   'ь': '',
+    'Э': 'E',  'э': 'e',
+    'Ю': 'Yu', 'ю': 'yu',
+    'Я': 'Ya', 'я': 'ya',
+    'Ў': "O'", 'ў': "o'",
+    'Ҳ': 'H',  'ҳ': 'h',
+    'Ҷ': 'J',  'ҷ': 'j',
+}
+
+_CYRILLIC_RE = re.compile(r'[А-яЁёҒғҚқҲҳЎўҶҷ]')
+
+# Characters that break edge-tts SSML for Uzbek voice → safe replacements
+_TTS_SAFE: dict[str, str] = {
+    '«': '"', '»': '"',
+    '‘': "'", '’': "'",  # curly single quotes
+    '“': '"', '”': '"',  # curly double quotes
+    '—': '-', '–': '-',  # em/en dash
+    '…': '...',               # ellipsis
+}
+
+
+def _has_cyrillic(text: str) -> bool:
+    return bool(_CYRILLIC_RE.search(text))
+
+
+def _cyrillic_to_latin_uz(text: str) -> str:
+    """Transliterate Uzbek Cyrillic text to Uzbek Latin for edge-tts compatibility."""
+    return ''.join(_UZ_CYR_TO_LAT.get(ch, ch) for ch in text)
+
+
+def _sanitize_for_uz_tts(text: str) -> str:
+    """Replace characters that cause edge-tts to return no audio on the Uzbek voice."""
+    return ''.join(_TTS_SAFE.get(ch, ch) for ch in text)
 
 # Default voice mappings for backward compatibility with simple language codes
 DEFAULT_VOICES = {
@@ -35,7 +103,14 @@ async def text_to_speech(text: str, voice_or_lang: str = "en") -> bytes:
         
     logger.debug("Selected edge-tts voice: %s", voice)
     
-    # 2. Synthesize using edge-tts
+    # 2. Transliterate Uzbek Cyrillic → Latin (edge-tts uz-UZ voices require Latin script)
+    if voice.startswith("uz-"):
+        if _has_cyrillic(text):
+            logger.info("Transliterating Uzbek Cyrillic → Latin for TTS (%d chars)", len(text))
+            text = _cyrillic_to_latin_uz(text)
+        text = _sanitize_for_uz_tts(text)
+
+    # 3. Synthesize using edge-tts
     try:
         communicate = edge_tts.Communicate(text, voice)
         audio_bytes = b""

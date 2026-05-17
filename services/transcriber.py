@@ -39,17 +39,31 @@ _MIME_TYPES: dict[str, str] = {
 }
 
 _TRANSCRIBE_PROMPT = """\
-Transcribe the audio message exactly as spoken — every word, no paraphrasing.
+Transcribe the audio message verbatim. Every word the speaker says must appear — no paraphrasing, no omissions, no "cleaning up" of speech.
 
-Return ONLY a valid JSON object with exactly these two fields:
+PRESERVE SPOKEN STYLE:
+- Keep ALL filler words and discourse markers exactly as spoken (e.g., "koroche", "prosto", "lish", "kak", "no", "nu", "vot", "haligi", "yani"). Do NOT drop them, do NOT normalize them to literary forms.
+- Keep colloquial/spoken pronunciations as the speaker said them (e.g., "to'g'irlashim" not "to'g'rilashim" if that is what was said; "prosto" not "prosta"; "bo'laverardi" not "bo'laveradi"). Match what you actually hear.
+- Keep code-switched words (Russian inside Uzbek, etc.) in their spoken form. Transliterate Russian words into Latin script using the same script as the surrounding language.
+- Do NOT add words. Do NOT rephrase. Do NOT summarize. Do NOT correct grammar.
+
+PUNCTUATION & FORMATTING:
+- Add sentence-ending punctuation (. ? !) at natural sentence boundaries.
+- Add commas at natural pauses and clause boundaries.
+- Capitalize the first letter of each sentence.
+- Use guillemets «» around speech the speaker is quoting from themselves or others (e.g., «Oldingidek vnimaniya qiling»). Use regular quotes "" only if guillemets are not appropriate for the language.
+- Use an em-dash or hyphen-connector where the speaker chains clauses tightly (e.g., "aytyapman-u", "kerak-ku").
+- Break the transcription into PARAGRAPHS at natural topic shifts or long pauses. Do NOT return one giant wall of text — a 30+ second monologue should typically be 2–4 paragraphs.
+
+OUTPUT:
+Return ONLY a valid JSON object with exactly these two fields, no markdown fences, no explanation:
 {
-  "text": "<full verbatim transcription>",
+  "text": "<full verbatim transcription with punctuation and paragraph breaks>",
   "language": "<detected language in English, e.g. English, Russian, Uzbek, Arabic>"
 }
 
-No markdown fences, no explanation — just the raw JSON.
+In the JSON string, represent paragraph breaks as \\n\\n (two newline characters).
 """
-
 
 @dataclass
 class TranscriptResult:
