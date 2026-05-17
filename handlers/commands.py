@@ -194,14 +194,14 @@ async def cmd_set_balance(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             from database.users import log_purchase
             revenue_uzs = 0
             if feature == "transcribe":
-                revenue_uzs = int((amount / 3600.0) * 10000)
+                revenue_uzs = int((amount / 3600.0) * 7000)   # 7 000 so'm per hour
             else:
                 if amount <= 20:
-                    revenue_uzs = amount * 500
+                    revenue_uzs = amount * 350    # 7 000 / 20
                 elif amount <= 100:
-                    revenue_uzs = amount * 400
+                    revenue_uzs = amount * 280    # 28 000 / 100
                 else:
-                    revenue_uzs = amount * 333
+                    revenue_uzs = amount * 233    # 70 000 / 300
             await log_purchase(target_id, feature, amount, revenue_uzs)
 
         await update.message.reply_text(

@@ -4,8 +4,10 @@ bot.py — VoiceScribe AI Telegram Bot entry point.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
+from datetime import datetime, timedelta
 
 from telegram import BotCommand, Update
 from telegram.ext import (
@@ -19,6 +21,7 @@ from telegram.ext import (
 
 from config import config
 from database.db import init_db
+from database.users import get_setting, reset_all_monthly_balances, set_setting
 from handlers.callbacks import (
     callback_actions,
     callback_back_to_main,
@@ -66,9 +69,29 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
+async def _monthly_reset_loop() -> None:
+    """Background task: reset all user balances to defaults on the 1st of each month."""
+    while True:
+        now = datetime.utcnow()
+        current_month = now.strftime("%Y-%m")
+
+        if now.day == 1:
+            last_reset = await get_setting("last_monthly_reset")
+            if last_reset != current_month:
+                count = await reset_all_monthly_balances()
+                await set_setting("last_monthly_reset", current_month)
+                logger.info("Monthly balance reset complete — %d users reset for %s.", count, current_month)
+
+        # Sleep until the start of the next day (UTC midnight + 1 min)
+        tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=1, second=0, microsecond=0)
+        await asyncio.sleep((tomorrow - now).total_seconds())
+
+
 async def post_init(application: Application) -> None:
     logger.info("Initialising database…")
+    await init_db()
     logger.info("Database ready.")
+    asyncio.create_task(_monthly_reset_loop())
     
     # ── Verify required channel access ───────────────────────
     try:

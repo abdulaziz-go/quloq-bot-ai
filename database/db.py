@@ -65,6 +65,13 @@ CREATE TABLE IF NOT EXISTS purchases (
 );
 """
 
+CREATE_BOT_SETTINGS = """
+CREATE TABLE IF NOT EXISTS bot_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+"""
+
 
 async def init_db() -> None:
     """Create all tables and run migrations."""
@@ -74,6 +81,7 @@ async def init_db() -> None:
         await db.execute(CREATE_TRANSCRIPTS)
         await db.execute(CREATE_USAGE_LOG)
         await db.execute(CREATE_PURCHASES)
+        await db.execute(CREATE_BOT_SETTINGS)
         
         # Migration: Add 'language' column if it doesn't exist
         try:

@@ -39,7 +39,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         context.user_data["state"] = None
 
         # Enforce length constraint (5,000 characters)
-        if len(text) > 5000:
+        if len(text) > 10000:
             await message.reply_text(
                 get_text("err_too_long_tts", lang),
                 parse_mode="MarkdownV2"

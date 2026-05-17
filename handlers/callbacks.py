@@ -341,7 +341,7 @@ async def callback_tts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     # Check constraint: Max text length for TTS
-    if len(transcript_row["text"]) > 5000:
+    if len(transcript_row["text"]) > 10000:
         await query.message.reply_text(
             get_text("err_too_long_tts", lang),
             parse_mode="MarkdownV2"
@@ -474,12 +474,12 @@ async def callback_tts_select(update: Update, context: ContextTypes.DEFAULT_TYPE
         voice_file = io.BytesIO(audio_bytes)
         voice_file.name = "voice.mp3"
 
-        # Determine success label caption
-        caption = get_text("tts_success", lang).replace("\\!", "!").replace("\\*", "")
+        caption = get_text("tts_success", lang)
 
         await query.message.reply_voice(
             voice=voice_file,
             caption=caption,
+            parse_mode="MarkdownV2",
             reply_to_message_id=query.message.reply_to_message.message_id if query.message.reply_to_message else None
         )
         
@@ -666,41 +666,41 @@ async def callback_buy_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if feature == "transcribe":
         text = get_text("buy_menu_transcribe", lang)
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("60 Min ($1.00)", callback_data="buy:trans:3600")],
-            [InlineKeyboardButton("3 Hours ($2.50)", callback_data="buy:trans:10800")],
-            [InlineKeyboardButton("10 Hours ($7.00)", callback_data="buy:trans:36000")],
+            [InlineKeyboardButton("60 daqiqa — 7 000 so'm", callback_data="buy:trans:3600")],
+            [InlineKeyboardButton("3 soat — 21 000 so'm",   callback_data="buy:trans:10800")],
+            [InlineKeyboardButton("10 soat — 70 000 so'm",  callback_data="buy:trans:36000")],
             [InlineKeyboardButton(get_text("btn_back", lang), callback_data="buy_menu:main")],
         ])
     elif feature == "summarize":
         text = get_text("buy_menu_summarize", lang)
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("20 Sum ($1.00)", callback_data="buy:summarize:20")],
-            [InlineKeyboardButton("100 Sum ($4.00)", callback_data="buy:summarize:100")],
-            [InlineKeyboardButton("300 Sum ($10.00)", callback_data="buy:summarize:300")],
+            [InlineKeyboardButton("20 ta — 7 000 so'm",  callback_data="buy:summarize:20")],
+            [InlineKeyboardButton("100 ta — 28 000 so'm", callback_data="buy:summarize:100")],
+            [InlineKeyboardButton("300 ta — 70 000 so'm", callback_data="buy:summarize:300")],
             [InlineKeyboardButton(get_text("btn_back", lang), callback_data="buy_menu:main")],
         ])
     elif feature == "translate":
         text = get_text("buy_menu_translate", lang)
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("20 Trans ($1.00)", callback_data="buy:translate:20")],
-            [InlineKeyboardButton("100 Trans ($4.00)", callback_data="buy:translate:100")],
-            [InlineKeyboardButton("300 Trans ($10.00)", callback_data="buy:translate:300")],
+            [InlineKeyboardButton("20 ta — 7 000 so'm",  callback_data="buy:translate:20")],
+            [InlineKeyboardButton("100 ta — 28 000 so'm", callback_data="buy:translate:100")],
+            [InlineKeyboardButton("300 ta — 70 000 so'm", callback_data="buy:translate:300")],
             [InlineKeyboardButton(get_text("btn_back", lang), callback_data="buy_menu:main")],
         ])
     elif feature == "actions":
         text = get_text("buy_menu_actions", lang)
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("20 Extr ($1.00)", callback_data="buy:actions:20")],
-            [InlineKeyboardButton("100 Extr ($4.00)", callback_data="buy:actions:100")],
-            [InlineKeyboardButton("300 Extr ($10.00)", callback_data="buy:actions:300")],
+            [InlineKeyboardButton("20 ta — 7 000 so'm",  callback_data="buy:actions:20")],
+            [InlineKeyboardButton("100 ta — 28 000 so'm", callback_data="buy:actions:100")],
+            [InlineKeyboardButton("300 ta — 70 000 so'm", callback_data="buy:actions:300")],
             [InlineKeyboardButton(get_text("btn_back", lang), callback_data="buy_menu:main")],
         ])
     elif feature == "tts":
         text = get_text("buy_menu_tts", lang)
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("20 TTS ($1.00)", callback_data="buy:tts:20")],
-            [InlineKeyboardButton("100 TTS ($4.00)", callback_data="buy:tts:100")],
-            [InlineKeyboardButton("300 TTS ($10.00)", callback_data="buy:tts:300")],
+            [InlineKeyboardButton("20 ta — 7 000 so'm",  callback_data="buy:tts:20")],
+            [InlineKeyboardButton("100 ta — 28 000 so'm", callback_data="buy:tts:100")],
+            [InlineKeyboardButton("300 ta — 70 000 so'm", callback_data="buy:tts:300")],
             [InlineKeyboardButton(get_text("btn_back", lang), callback_data="buy_menu:main")],
         ])
     

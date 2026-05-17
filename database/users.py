@@ -269,6 +269,45 @@ async def add_balance(user_id: int, feature: str, amount: int) -> bool:
         return cur.rowcount > 0
 
 
+async def reset_all_monthly_balances() -> int:
+    """Reset every user's balance columns to monthly defaults. Returns number of rows updated."""
+    async with aiosqlite.connect(get_db_path()) as db:
+        cur = await db.execute(
+            """
+            UPDATE users SET
+                balance_transcribe_sec = 3600,
+                balance_summarize_req  = 20,
+                balance_translate_req  = 20,
+                balance_extract_req    = 20,
+                balance_tts_req        = 100,
+                updated_at             = datetime('now')
+            """
+        )
+        await db.commit()
+        return cur.rowcount
+
+
+async def get_setting(key: str) -> str | None:
+    """Read a value from bot_settings table."""
+    async with aiosqlite.connect(get_db_path()) as db:
+        async with db.execute(
+            "SELECT value FROM bot_settings WHERE key = ?", (key,)
+        ) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else None
+
+
+async def set_setting(key: str, value: str) -> None:
+    """Upsert a value in bot_settings table."""
+    async with aiosqlite.connect(get_db_path()) as db:
+        await db.execute(
+            "INSERT INTO bot_settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
+        await db.commit()
+
+
 async def get_user_growth_data(period: str = "daily") -> list[dict]:
     """Returns user join counts grouped by hour, day, month, or year (converted to Uzbekistan Time +5 hours)."""
     fmt = {
