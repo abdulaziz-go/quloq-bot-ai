@@ -352,13 +352,63 @@ async def callback_tts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Save to user session
     context.user_data["tts_text"] = transcript_row["text"]
 
-    # Display the premium voice models selection menu
-    keyboard = get_tts_keyboard(lang)
+    # Step 1: Show language selection
+    select_lang_text = {
+        "uz": "🌐 *Ovoz tilini tanlang:*",
+        "ru": "🌐 *Выберите язык голоса:*",
+        "en": "🌐 *Select voice language:*",
+    }.get(lang, "🌐 *Select voice language:*")
+
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🇺🇿 O'zbekcha", callback_data="tts_lang:uz"),
+            InlineKeyboardButton("🇷🇺 Русский",   callback_data="tts_lang:ru"),
+            InlineKeyboardButton("🇺🇸 English",   callback_data="tts_lang:en"),
+        ]
+    ])
     await query.message.reply_text(
-        get_text("select_voice_model", lang),
+        select_lang_text,
         parse_mode="MarkdownV2",
         reply_markup=keyboard,
         reply_to_message_id=int(msg_id)
+    )
+    await query.answer()
+
+
+async def callback_tts_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle TTS language selection, then show voice model keyboard for that language."""
+    query = update.callback_query
+    user = update.effective_user
+    if not user or not query:
+        return
+
+    lang = await get_user_language(user.id)
+
+    from database.users import check_balance
+    if not await check_balance(user.id, "tts"):
+        await query.message.reply_text(
+            get_text("limit_reached", lang, feature="Text-to-Speech"),
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(get_text("btn_buy_more", lang), callback_data="buy_menu:tts")
+            ]])
+        )
+        await query.answer()
+        return
+
+    text = context.user_data.get("tts_text")
+    if not text:
+        await query.answer(get_text("err_no_tts_text", lang).strip("❌ *!."), show_alert=True)
+        return
+
+    # data: tts_lang:uz / tts_lang:ru / tts_lang:en
+    _, chosen_lang = query.data.split(":")
+
+    keyboard = get_tts_keyboard(chosen_lang)
+    await query.edit_message_text(
+        get_text("select_voice_model", lang),
+        parse_mode="MarkdownV2",
+        reply_markup=keyboard,
     )
     await query.answer()
 

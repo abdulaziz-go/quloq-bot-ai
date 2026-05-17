@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from database.users import (
@@ -49,12 +49,23 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         # Store the text for voice synthesis
         context.user_data["tts_text"] = text
 
-        # Show the elegant voice selection keyboard
-        from handlers.callbacks import get_tts_keyboard
-        keyboard = get_tts_keyboard(lang)
-        
+        # Step 1: Ask user to pick the TTS language
+        select_lang_text = {
+            "uz": "🌐 *Ovoz tilini tanlang:*",
+            "ru": "🌐 *Выберите язык голоса:*",
+            "en": "🌐 *Select voice language:*",
+        }.get(lang, "🌐 *Select voice language:*")
+
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("🇺🇿 O'zbekcha", callback_data="tts_lang:uz"),
+                InlineKeyboardButton("🇷🇺 Русский",   callback_data="tts_lang:ru"),
+                InlineKeyboardButton("🇺🇸 English",   callback_data="tts_lang:en"),
+            ]
+        ])
+
         await message.reply_text(
-            get_text("select_voice_model", lang),
+            select_lang_text,
             parse_mode="MarkdownV2",
             reply_markup=keyboard,
             reply_to_message_id=message.message_id

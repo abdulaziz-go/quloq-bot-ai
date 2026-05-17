@@ -17,6 +17,7 @@ from telegram import (
 from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 
+from config import config
 from database.users import (
     get_or_create_user,
     get_user_language,
@@ -77,8 +78,33 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not audio_data: return
 
     tg_media, file_name, duration = audio_data
-    
-    # Enforce max duration constraint (20 minutes)
+
+    # ── Video-specific validation ─────────────────────────────────────────────
+    if message.video:
+        mime = getattr(tg_media, "mime_type", "") or ""
+        if not mime.startswith("video/"):
+            err = {
+                "uz": "❌ *Qo'llab\\-quvvatlanmaydigan fayl turi\\!*\n\nFaqat video fayllar qabul qilinadi \\(MP4, MOV, AVI va boshqalar\\)\\.",
+                "ru": "❌ *Неподдерживаемый тип файла\\!*\n\nПринимаются только видеофайлы \\(MP4, MOV, AVI и др\\.\\)\\.",
+                "en": "❌ *Unsupported file type\\!*\n\nOnly video files are accepted \\(MP4, MOV, AVI, etc\\.\\)\\.",
+            }.get(lang, "❌ *Unsupported file type\\!* Only video files are accepted\\.")
+            await message.reply_text(err, parse_mode="MarkdownV2")
+            return
+
+    # ── File size validation (Telegram Bot API limit: 20 MB) ─────────────────
+    file_size = getattr(tg_media, "file_size", None)
+    max_bytes = config.max_audio_size_mb * 1024 * 1024
+    if file_size and file_size > max_bytes:
+        size_mb = file_size / (1024 * 1024)
+        err = {
+            "uz": f"❌ *Fayl hajmi juda katta\\!*\n\nMaksimal ruxsat etilgan hajm: *{config.max_audio_size_mb} MB*\\. Sizning faylingiz: *{size_mb:.1f} MB*\\.\n\n💡 Iltimos, qisqaroq yoki kichikroq fayl yuboring\\.",
+            "ru": f"❌ *Файл слишком большой\\!*\n\nМаксимально допустимый размер: *{config.max_audio_size_mb} МБ*\\. Ваш файл: *{size_mb:.1f} МБ*\\.\n\n💡 Пожалуйста, отправьте файл меньшего размера\\.",
+            "en": f"❌ *File too large\\!*\n\nMaximum allowed size is *{config.max_audio_size_mb} MB*\\. Your file is *{size_mb:.1f} MB*\\.\n\n💡 Please send a smaller or shorter file\\.",
+        }.get(lang, f"❌ *File too large\\!* Maximum is {config.max_audio_size_mb} MB\\.")
+        await message.reply_text(err, parse_mode="MarkdownV2")
+        return
+
+    # ── Duration validation (max 20 minutes) ─────────────────────────────────
     if duration > 1200:
         await message.reply_text(
             get_text("err_too_long_audio", lang),

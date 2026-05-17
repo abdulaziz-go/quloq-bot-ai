@@ -75,12 +75,34 @@ def _upload_sync(tmp_path: str, mime_type: str):
         )
 
 
+def _get_file_sync(file_name: str):
+    """Synchronous file state fetch — wrapped via asyncio.to_thread."""
+    return _client.files.get(name=file_name)
+
+
 def _delete_sync(file_name: str) -> None:
     """Synchronous delete — wrapped via asyncio.to_thread."""
     try:
         _client.files.delete(name=file_name)
     except Exception as exc:
         logger.warning("Could not delete Gemini file %s: %s", file_name, exc)
+
+
+async def _wait_for_active(file_name: str, max_wait: float = 60.0) -> None:
+    """Poll until the Gemini file reaches ACTIVE state (needed for video files)."""
+    deadline = asyncio.get_event_loop().time() + max_wait
+    while asyncio.get_event_loop().time() < deadline:
+        info = await asyncio.to_thread(_get_file_sync, file_name)
+        state = getattr(info, "state", None)
+        state_name = state.name if state else str(state)
+        if state_name == "ACTIVE":
+            logger.debug("Gemini file %s is ACTIVE.", file_name)
+            return
+        if state_name == "FAILED":
+            raise RuntimeError(f"Gemini file processing failed for {file_name}.")
+        logger.debug("Gemini file %s state=%s — waiting…", file_name, state_name)
+        await asyncio.sleep(2)
+    raise TimeoutError(f"Gemini file {file_name} did not become ACTIVE within {max_wait}s.")
 
 
 async def transcribe_telegram_file(
@@ -116,6 +138,9 @@ async def transcribe_telegram_file(
         logger.info("Uploading %.1f KB to Gemini Files API (mime=%s)…", size_kb, mime)
 
         gemini_file = await asyncio.to_thread(_upload_sync, tmp_path, mime)
+
+        # Video files need processing time before they become ACTIVE
+        await _wait_for_active(gemini_file.name)
 
         response = await _client.aio.models.generate_content(
             model=config.audio_model,

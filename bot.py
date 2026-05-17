@@ -34,6 +34,7 @@ from handlers.callbacks import (
     callback_buy_plan,
     callback_admin_chart,
     callback_tts,
+    callback_tts_lang,
     callback_tts_select,
     callback_tts_preview,
 )
@@ -141,6 +142,7 @@ def build_app() -> Application:
     app.add_handler(CallbackQueryHandler(callback_translate_menu, pattern=r"^trans_menu:"))
     app.add_handler(CallbackQueryHandler(callback_translate_exec, pattern=r"^trans:"))
     app.add_handler(CallbackQueryHandler(callback_tts,           pattern=r"^tts:"))
+    app.add_handler(CallbackQueryHandler(callback_tts_lang,      pattern=r"^tts_lang:"))
     app.add_handler(CallbackQueryHandler(callback_tts_select,    pattern=r"^tts_sel:"))
     app.add_handler(CallbackQueryHandler(callback_tts_preview,   pattern=r"^tts_prev:"))
     app.add_handler(CallbackQueryHandler(callback_back_to_main, pattern=r"^back:"))
