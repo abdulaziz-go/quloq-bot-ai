@@ -44,8 +44,8 @@ class Config:
 
     # ── Gemini Models ─────────────────────────────────────────
     # Using the best models available for your account
-    gemini_model: str = "gemini-3.1-flash-lite"
-    audio_model: str  = "gemini-3.1-flash-lite"
+    gemini_model: str = "gemini-2.5-flash"
+    audio_model: str  = "gemini-2.5-flash"
 
     # ── Limits ───────────────────────────────────────────────
     max_audio_size_mb: int = 20
