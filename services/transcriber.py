@@ -1,8 +1,8 @@
 """
-services/transcriber.py — Audio transcription via Google Gemini 2.0 Flash.
+services/transcriber.py — Audio transcription via Google Gemini.
 
-Uses the official `google-genai` SDK (not the deprecated google-generativeai).
-Gemini 2.0 Flash natively understands audio — transcribes + detects language in one call.
+Passes audio as inline bytes directly to generate_content — no Files API.
+This avoids the Files API upload endpoint which is unreliable from some regions.
 """
 
 from __future__ import annotations
@@ -11,20 +11,72 @@ import asyncio
 import io
 import json
 import logging
-import os
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 from config import config
 
 logger = logging.getLogger(__name__)
 
-# Shared async client
-_client = genai.Client(api_key=config.google_api_key)
+# 120 s HTTP-level timeout covers slow inference on long audio
+_client = genai.Client(
+    api_key=config.google_api_key,
+    http_options=types.HttpOptions(timeout=120_000),
+)
+
+MAX_INLINE_AUDIO_BYTES = 20 * 1024 * 1024  # 20 MB — Gemini inline data limit
+
+_MAX_RETRIES = 3
+_RETRY_BASE_DELAY = 2.0
+_RETRYABLE_STATUS_CODES = frozenset({500, 502, 503, 504})
+
+
+def _error_status(exc: Exception) -> int | None:
+    for attr in ("code", "status_code", "http_status"):
+        val = getattr(exc, attr, None)
+        if isinstance(val, int):
+            return val
+    return None
+
+
+async def _with_retry(coro_factory, label: str):
+    """Run an async operation with exponential backoff on transient errors.
+
+    Retries on asyncio.TimeoutError and ServerError with 5xx status codes.
+    Raises immediately on 4xx errors (auth, bad request, etc.).
+    """
+    delay = _RETRY_BASE_DELAY
+    for attempt in range(1, _MAX_RETRIES + 1):
+        try:
+            return await coro_factory()
+        except asyncio.TimeoutError:
+            if attempt == _MAX_RETRIES:
+                logger.error("%s timed out after %d attempts.", label, attempt)
+                raise
+            logger.warning(
+                "%s timed out (attempt %d/%d), retrying in %.0fs…",
+                label, attempt, _MAX_RETRIES, delay,
+            )
+        except genai_errors.ServerError as exc:
+            code = _error_status(exc)
+            if code not in _RETRYABLE_STATUS_CODES:
+                raise
+            if attempt == _MAX_RETRIES:
+                logger.error(
+                    "%s server error %s after %d attempts: %s", label, code, attempt, exc
+                )
+                raise
+            logger.warning(
+                "%s server error %s (attempt %d/%d), retrying in %.0fs…",
+                label, code, attempt, _MAX_RETRIES, delay,
+            )
+        await asyncio.sleep(delay)
+        delay *= 2
+
 
 # MIME type mapping by extension
 _MIME_TYPES: dict[str, str] = {
@@ -65,6 +117,7 @@ Return ONLY a valid JSON object with exactly these two fields, no markdown fence
 In the JSON string, represent paragraph breaks as \\n\\n (two newline characters).
 """
 
+
 @dataclass
 class TranscriptResult:
     text: str
@@ -80,43 +133,18 @@ def _get_mime(filename: str) -> str:
     return _MIME_TYPES.get(ext, "audio/ogg")
 
 
-def _upload_sync(tmp_path: str, mime_type: str):
-    """Synchronous upload — wrapped via asyncio.to_thread."""
-    with open(tmp_path, "rb") as f:
-        return _client.files.upload(
-            file=f,
-            config=types.UploadFileConfig(mime_type=mime_type),
-        )
-
-
-def _get_file_sync(file_name: str):
-    """Synchronous file state fetch — wrapped via asyncio.to_thread."""
-    return _client.files.get(name=file_name)
-
-
-def _delete_sync(file_name: str) -> None:
-    """Synchronous delete — wrapped via asyncio.to_thread."""
-    try:
-        _client.files.delete(name=file_name)
-    except Exception as exc:
-        logger.warning("Could not delete Gemini file %s: %s", file_name, exc)
-
-
-async def _wait_for_active(file_name: str, max_wait: float = 60.0) -> None:
-    """Poll until the Gemini file reaches ACTIVE state (needed for video files)."""
-    deadline = asyncio.get_event_loop().time() + max_wait
-    while asyncio.get_event_loop().time() < deadline:
-        info = await asyncio.to_thread(_get_file_sync, file_name)
-        state = getattr(info, "state", None)
-        state_name = state.name if state else str(state)
-        if state_name == "ACTIVE":
-            logger.debug("Gemini file %s is ACTIVE.", file_name)
-            return
-        if state_name == "FAILED":
-            raise RuntimeError(f"Gemini file processing failed for {file_name}.")
-        logger.debug("Gemini file %s state=%s — waiting…", file_name, state_name)
-        await asyncio.sleep(2)
-    raise TimeoutError(f"Gemini file {file_name} did not become ACTIVE within {max_wait}s.")
+def _transcribe_sync(audio_bytes: bytes, mime: str):
+    """Synchronous generate_content call — wrapped via asyncio.to_thread."""
+    return _client.models.generate_content(
+        model=config.audio_model,
+        contents=[
+            _TRANSCRIBE_PROMPT,
+            types.Part.from_bytes(data=audio_bytes, mime_type=mime),
+        ],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+        ),
+    )
 
 
 async def transcribe_telegram_file(
@@ -125,63 +153,48 @@ async def transcribe_telegram_file(
     duration_sec: float | None = None,
 ) -> TranscriptResult:
     """
-    Download a Telegram audio file and transcribe it via Gemini 2.0 Flash.
+    Download a Telegram audio file and transcribe it via Gemini.
     Returns TranscriptResult with verbatim text and detected language.
     """
     logger.info("Downloading '%s' for transcription…", file_name)
 
     buf = io.BytesIO()
     await tg_file.download_to_memory(buf)
-    buf.seek(0)
+    audio_bytes = buf.getvalue()
 
-    suffix = Path(file_name).suffix or ".ogg"
-    mime = _get_mime(file_name)
-
-    tmp_path = None
-    gemini_file = None
-    response_text = ""
-    tokens = 0
-
-    try:
-        # Write to temp file (Files API needs a path)
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            tmp.write(buf.read())
-            tmp_path = tmp.name
-
-        size_kb = os.path.getsize(tmp_path) / 1024
-        logger.info("Uploading %.1f KB to Gemini Files API (mime=%s)…", size_kb, mime)
-
-        gemini_file = await asyncio.to_thread(_upload_sync, tmp_path, mime)
-
-        # Video files need processing time before they become ACTIVE
-        await _wait_for_active(gemini_file.name)
-
-        response = await _client.aio.models.generate_content(
-            model=config.audio_model,
-            contents=[
-                types.Part.from_uri(
-                    file_uri=gemini_file.uri,
-                    mime_type=mime,
-                ),
-                _TRANSCRIBE_PROMPT,
-            ],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-            )
+    size_kb = len(audio_bytes) / 1024
+    if len(audio_bytes) > MAX_INLINE_AUDIO_BYTES:
+        raise ValueError(
+            f"Audio file too large for inline transcription: {size_kb:.0f} KB "
+            f"(limit {MAX_INLINE_AUDIO_BYTES // 1024} KB)"
         )
 
-        # Extract text manually to avoid warnings about non-text parts (like thought_signature)
+    mime = _get_mime(file_name)
+    logger.info("Transcribing %.1f KB inline (mime=%s)…", size_kb, mime)
+
+    response_text = ""
+    tokens = 0
+    input_tokens = 0
+    output_tokens = 0
+
+    try:
+        response = await _with_retry(
+            lambda: asyncio.wait_for(
+                asyncio.to_thread(_transcribe_sync, audio_bytes, mime),
+                timeout=120.0,
+            ),
+            "generate_content",
+        )
+
         text_parts = [part.text for part in response.candidates[0].content.parts if part.text]
         response_text = "".join(text_parts).strip()
-        tokens = 0
-        input_tokens = 0
-        output_tokens = 0
+
         if response.usage_metadata:
             tokens = response.usage_metadata.total_token_count
             input_tokens = response.usage_metadata.prompt_token_count
             output_tokens = response.usage_metadata.candidates_token_count
 
-        # Clean up any markdown blocks if they exist
+        # Strip markdown fences if the model wrapped the JSON
         if "```" in response_text:
             response_text = response_text.split("```")[1]
             if response_text.startswith("json"):
@@ -201,15 +214,9 @@ async def transcribe_telegram_file(
         logger.exception("Transcription error: %s", exc)
         raise
 
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-        if gemini_file:
-            await asyncio.to_thread(_delete_sync, gemini_file.name)
-
     logger.info(
         "Transcription done. Language=%s  Duration=%.1fs  Chars=%d Tokens=%d",
-        language, duration_sec or 0, len(text), tokens
+        language, duration_sec or 0, len(text), tokens,
     )
 
     return TranscriptResult(
@@ -218,5 +225,5 @@ async def transcribe_telegram_file(
         duration_sec=duration_sec,
         tokens=tokens,
         input_tokens=input_tokens,
-        output_tokens=output_tokens
+        output_tokens=output_tokens,
     )

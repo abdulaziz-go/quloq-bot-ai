@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
+from google.genai import errors as genai_errors
 from telegram import (
     Audio,
     InlineKeyboardButton,
@@ -19,6 +21,8 @@ from telegram.ext import ContextTypes
 
 from config import config
 from database.users import (
+    check_balance,
+    deduct_balance,
     get_or_create_user,
     get_user_language,
     log_usage,
@@ -30,6 +34,11 @@ from utils.formatting import format_transcript
 from utils.i18n import get_text
 
 logger = logging.getLogger(__name__)
+
+# Per-user in-progress guard (max 1 transcription at a time per user)
+_active_transcriptions: set[int] = set()
+# Strong references so GC doesn't collect background tasks before they finish
+_background_tasks: set[asyncio.Task] = set()
 
 
 def _build_keyboard(message_id: int, chat_id: int, lang: str) -> InlineKeyboardMarkup:
@@ -112,10 +121,14 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    # Wrap the plain loading text in bold tags for HTML
-    loading_text = f"<b>{get_text('transcribing', lang)}</b>"
-        
-    from database.users import check_balance, deduct_balance
+    # ── Per-user concurrency limit ────────────────────────────────────────────
+    if user.id in _active_transcriptions:
+        await message.reply_text(
+            "⏳ Oldingi xabar hali ham qayta ishlanmoqda. Iltimos, biroz kuting.",
+            parse_mode="HTML",
+        )
+        return
+
     if not await check_balance(user.id, "transcribe", requirement=int(duration)):
         await message.reply_text(
             get_text("limit_reached", lang, feature="Transcription"),
@@ -126,38 +139,83 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
+    loading_text = f"<b>{get_text('transcribing', lang)}</b>"
     processing_msg = await message.reply_text(loading_text, parse_mode="HTML")
     await context.bot.send_chat_action(chat_id=message.chat_id, action=ChatAction.TYPING)
 
-    try:
-        # Get the actual file object from Telegram servers
-        tg_file = await context.bot.get_file(tg_media.file_id)
-        
-        result = await transcribe_telegram_file(tg_file, file_name, duration)
-        await log_usage(
-            user.id,
-            "transcribe",
-            tokens=result.tokens,
-            duration_sec=duration,
-            input_tokens=result.input_tokens,
-            output_tokens=result.output_tokens
-        )
-        await deduct_balance(user.id, "transcribe", amount=int(duration))
-        await save_transcript(message.message_id, message.chat_id, user.id, result.text, result.language, duration)
+    _active_transcriptions.add(user.id)
 
-        transcript_text = format_transcript(result.text, result.language, duration)
-        keyboard = _build_keyboard(message.message_id, message.chat_id, lang)
+    async def _process() -> None:
+        try:
+            tg_file = await context.bot.get_file(tg_media.file_id)
+            result = await transcribe_telegram_file(tg_file, file_name, duration)
 
-        await processing_msg.edit_text(transcript_text, parse_mode="MarkdownV2", reply_markup=keyboard)
+            await log_usage(
+                user.id,
+                "transcribe",
+                tokens=result.tokens,
+                duration_sec=duration,
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+            )
+            await deduct_balance(user.id, "transcribe", amount=int(duration))
+            await save_transcript(
+                message.message_id, message.chat_id, user.id,
+                result.text, result.language, duration,
+            )
 
-    except Exception as exc:
-        logger.exception("Transcription failed: %s", exc)
-        safe_error = str(exc)[:120]
-        error_text = get_text("error_generic", lang).replace("\\.", ".")
-        if error_text.count("*") >= 2:
-            error_text = error_text.replace("*", "<b>", 1).replace("*", "</b>", 1)
-            
-        await processing_msg.edit_text(
-            f"{error_text}\n\n<i>Error: {safe_error}</i>",
-            parse_mode="HTML",
-        )
+            transcript_text = format_transcript(result.text, result.language, duration)
+            keyboard = _build_keyboard(message.message_id, message.chat_id, lang)
+            await processing_msg.edit_text(
+                transcript_text, parse_mode="MarkdownV2", reply_markup=keyboard
+            )
+
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Transcription timed out for user %s, file=%s", user.id, file_name
+            )
+            await processing_msg.edit_text(
+                "⏱ Gemini server javob bermayapti. Iltimos, biroz kutib qayta urinib ko'ring.",
+                parse_mode="HTML",
+            )
+        except RuntimeError as exc:
+            logger.error(
+                "Transcription runtime error for user %s, file=%s: %s",
+                user.id, file_name, exc,
+            )
+            await processing_msg.edit_text(
+                "⚠️ Gemini serverida vaqtinchalik nosozlik. Keyinroq qayta urinib ko'ring.",
+                parse_mode="HTML",
+            )
+        except genai_errors.APIError as exc:
+            code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+            if isinstance(code, int) and code >= 500:
+                logger.error(
+                    "Gemini server error %s for user %s: %s", code, user.id, exc
+                )
+                await processing_msg.edit_text(
+                    "⚠️ Gemini serverida vaqtinchalik nosozlik. Keyinroq qayta urinib ko'ring.",
+                    parse_mode="HTML",
+                )
+            else:
+                logger.error(
+                    "Gemini API error %s for user %s: %s", code, user.id, exc
+                )
+                await processing_msg.edit_text(
+                    "❌ Xatolik yuz berdi. Admin bilan bog'laning.",
+                    parse_mode="HTML",
+                )
+        except Exception as exc:
+            logger.exception(
+                "Transcription failed for user %s, file=%s: %s", user.id, file_name, exc
+            )
+            await processing_msg.edit_text(
+                "❌ Xatolik yuz berdi. Admin bilan bog'laning.",
+                parse_mode="HTML",
+            )
+        finally:
+            _active_transcriptions.discard(user.id)
+
+    task = asyncio.create_task(_process())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
