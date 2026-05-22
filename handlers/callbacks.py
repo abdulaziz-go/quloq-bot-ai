@@ -666,9 +666,9 @@ async def callback_buy_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if feature == "transcribe":
         text = get_text("buy_menu_transcribe", lang)
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("60 daqiqa — 7 000 so'm", callback_data="buy:trans:3600")],
-            [InlineKeyboardButton("3 soat — 21 000 so'm",   callback_data="buy:trans:10800")],
-            [InlineKeyboardButton("10 soat — 70 000 so'm",  callback_data="buy:trans:36000")],
+            [InlineKeyboardButton("60 daqiqa — 9 100 so'm", callback_data="buy:trans:3600")],
+            [InlineKeyboardButton("3 soat — 24 500 so'm",   callback_data="buy:trans:10800")],
+            [InlineKeyboardButton("10 soat — 82 000 so'm",  callback_data="buy:trans:36000")],
             [InlineKeyboardButton(get_text("btn_back", lang), callback_data="buy_menu:main")],
         ])
     elif feature == "summarize":
