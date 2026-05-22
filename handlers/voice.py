@@ -114,7 +114,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     # ── Duration validation (max 20 minutes) ─────────────────────────────────
-if duration > 1200:
+    if duration > 1200:
         await message.reply_text(
             get_text("err_too_long_audio", lang),
             parse_mode="MarkdownV2"
