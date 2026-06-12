@@ -16,11 +16,12 @@ CREATE TABLE IF NOT EXISTS users (
     first_name  TEXT,
     language    TEXT DEFAULT 'en',
     is_premium  INTEGER NOT NULL DEFAULT 0,
-    balance_transcribe_sec INTEGER DEFAULT 3600,
-    balance_summarize_req  INTEGER DEFAULT 20,
-    balance_translate_req  INTEGER DEFAULT 20,
-    balance_extract_req    INTEGER DEFAULT 20,
-    balance_tts_req        INTEGER DEFAULT 100,
+    balance_transcribe_sec INTEGER DEFAULT 5400,
+    balance_summarize_req  INTEGER DEFAULT 30,
+    balance_translate_req  INTEGER DEFAULT 30,
+    balance_extract_req    INTEGER DEFAULT 30,
+    balance_tts_req        INTEGER DEFAULT 150,
+    balance_image_req      INTEGER DEFAULT 15,
     referrer    TEXT DEFAULT '(direct)',
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -97,11 +98,12 @@ async def init_db() -> None:
 
         # Migration: Add balance columns for existing users
         balance_cols = [
-            ("balance_transcribe_sec", "INTEGER DEFAULT 3600"),
-            ("balance_summarize_req", "INTEGER DEFAULT 20"),
-            ("balance_translate_req", "INTEGER DEFAULT 20"),
-            ("balance_extract_req", "INTEGER DEFAULT 20"),
-            ("balance_tts_req", "INTEGER DEFAULT 100"),
+            ("balance_transcribe_sec", "INTEGER DEFAULT 5400"),
+            ("balance_summarize_req", "INTEGER DEFAULT 30"),
+            ("balance_translate_req", "INTEGER DEFAULT 30"),
+            ("balance_extract_req", "INTEGER DEFAULT 30"),
+            ("balance_tts_req", "INTEGER DEFAULT 150"),
+            ("balance_image_req", "INTEGER DEFAULT 15"),
         ]
         for col_name, col_def in balance_cols:
             try:

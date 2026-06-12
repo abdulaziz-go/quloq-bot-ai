@@ -46,6 +46,8 @@ class Config:
     # Using the best models available for your account
     gemini_model: str = "gemini-2.5-flash-lite"
     audio_model: str  = "gemini-2.5-flash-lite"
+    # "Nano Banana" — Gemini's native image generation model
+    image_model: str  = "gemini-2.5-flash-image"
 
     # ── Limits ───────────────────────────────────────────────
     max_audio_size_mb: int = 20

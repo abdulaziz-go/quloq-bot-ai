@@ -659,6 +659,7 @@ async def callback_buy_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             [InlineKeyboardButton(get_text("btn_translation", lang), callback_data="buy_menu:translate")],
             [InlineKeyboardButton(get_text("btn_actions_extr", lang), callback_data="buy_menu:actions")],
             [InlineKeyboardButton(get_text("btn_tts_feature", lang), callback_data="buy_menu:tts")],
+            [InlineKeyboardButton(get_text("btn_image_feature", lang), callback_data="buy_menu:image")],
         ])
         await query.message.edit_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
         return
@@ -703,7 +704,15 @@ async def callback_buy_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             [InlineKeyboardButton("300 ta — 70 000 so'm", callback_data="buy:tts:300")],
             [InlineKeyboardButton(get_text("btn_back", lang), callback_data="buy_menu:main")],
         ])
-    
+    elif feature == "image":
+        text = get_text("buy_menu_image", lang)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("10 ta — 7 000 so'm",  callback_data="buy:image:10")],
+            [InlineKeyboardButton("50 ta — 28 000 so'm", callback_data="buy:image:50")],
+            [InlineKeyboardButton("150 ta — 70 000 so'm", callback_data="buy:image:150")],
+            [InlineKeyboardButton(get_text("btn_back", lang), callback_data="buy_menu:main")],
+        ])
+
     try:
         await query.message.edit_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
     except Exception:

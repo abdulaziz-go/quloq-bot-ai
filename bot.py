@@ -51,9 +51,11 @@ from handlers.commands import (
     cmd_set_balance,
     cmd_db_dump,
     cmd_tts,
+    cmd_image,
 )
 from handlers.voice import handle_voice
 from handlers.text import handle_text
+from handlers.photo import handle_photo
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -92,7 +94,11 @@ async def post_init(application: Application) -> None:
     await init_db()
     logger.info("Database ready.")
     asyncio.create_task(_monthly_reset_loop())
-    
+
+    # ── One-time: image generation & editing launch + announcement (runs once, ever) ──
+    from announce_image_feature import run_image_announcement
+    asyncio.create_task(run_image_announcement(application))
+
     # ── Verify required channel access ───────────────────────
     try:
         chat = await application.bot.get_chat(config.required_channel)
@@ -106,6 +112,7 @@ async def post_init(application: Application) -> None:
         BotCommand("help",   "📖 How to use the bot"),
         BotCommand("status", "👤 Check your plan & language"),
         BotCommand("tts",    "🔊 Convert text to speech"),
+        BotCommand("image",  "🎨 Generate an image from text"),
     ])
     
     # Show admin commands ONLY to admins in their menu
@@ -115,6 +122,7 @@ async def post_init(application: Application) -> None:
         BotCommand("help",      "📖 How to use the bot"),
         BotCommand("buy",       "💳 Balance & Buy Credits"),
         BotCommand("tts",       "🔊 Convert text to speech"),
+        BotCommand("image",     "🎨 Generate an image from text"),
         BotCommand("analytics", "📊 [Admin] View usage statistics"),
         BotCommand("users",     "👥 [Admin] View total users"),
         BotCommand("user",      "🔍 [Admin] Search for a user"),
@@ -147,6 +155,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("buy",    cmd_buy))
     app.add_handler(CommandHandler("status", cmd_buy))
     app.add_handler(CommandHandler("tts",    cmd_tts))
+    app.add_handler(CommandHandler("image",  cmd_image))
     app.add_handler(CommandHandler("set_balance", cmd_set_balance))
     app.add_handler(CommandHandler("analytics", cmd_analytics))
     app.add_handler(CommandHandler("users", cmd_users))
@@ -156,6 +165,7 @@ def build_app() -> Application:
     # ── Audio & Direct Text (TTS) ─────────────────────────────────────────────
     audio_filter = filters.VOICE | filters.AUDIO | filters.VIDEO_NOTE | filters.VIDEO
     app.add_handler(MessageHandler(audio_filter, handle_voice))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
  
     # ── Callbacks ─────────────────────────────────────────────────────────────
@@ -186,6 +196,7 @@ def main() -> None:
     logger.info("=" * 60)
     logger.info("Admin IDs: %s", config.admin_ids)
     logger.info("Gemini:    %s", config.gemini_model)
+    logger.info("Image:     %s", config.image_model)
     logger.info("=" * 60)
 
     app = build_app()

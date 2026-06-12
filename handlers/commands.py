@@ -112,6 +112,7 @@ async def cmd_buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         translate_bal=f"{db_user.get('balance_translate_req', 0)} req",
         extract_bal=f"{db_user.get('balance_extract_req', 0)} req",
         tts_bal=f"{db_user.get('balance_tts_req', 0)} req",
+        image_bal=f"{db_user.get('balance_image_req', 0)} req",
     )
 
     text = get_text(
@@ -161,6 +162,37 @@ async def cmd_tts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+@subscription_required
+async def cmd_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Prompt the user for a text description to generate an AI image (Nano Banana)."""
+    user = update.effective_user
+    if not user:
+        return
+
+    from database.users import check_balance, get_user_language
+    lang = await get_user_language(user.id)
+
+    # 1. Check if user has sufficient image-generation balance
+    if not await check_balance(user.id, "image"):
+        await update.message.reply_text(
+            get_text("limit_reached", lang, feature="Image Generation"),
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(get_text("btn_buy_more", lang), callback_data="buy_menu:image")
+            ]])
+        )
+        return
+
+    # 2. Set the user state to waiting for an image prompt
+    context.user_data["state"] = "waiting_for_image_prompt"
+
+    # 3. Prompt user for the image description
+    await update.message.reply_text(
+        get_text("prompt_image_prompt", lang),
+        parse_mode="MarkdownV2"
+    )
+
+
 @admin_only
 
 async def cmd_set_balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -168,7 +200,7 @@ async def cmd_set_balance(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if len(context.args) < 3:
         await update.message.reply_text(
             "Usage: `/set_balance <user_id> <feature> <amount>`\n\n"
-            "Features: `transcribe`, `summarize`, `translate`, `actions`, `tts`\n"
+            "Features: `transcribe`, `summarize`, `translate`, `actions`, `tts`, `image`\n"
             "Example: `/set_balance 123456 transcribe 3600` \\(adds 1 hour\\)",
             parse_mode="MarkdownV2",
         )

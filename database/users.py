@@ -212,8 +212,9 @@ async def check_balance(user_id: int, feature: str, requirement: int = 1) -> boo
             "translate": "balance_translate_req",
             "actions": "balance_extract_req",
             "tts": "balance_tts_req",
+            "image": "balance_image_req",
         }.get(feature)
-        
+
         if not column:
             return True
             
@@ -235,11 +236,12 @@ async def deduct_balance(user_id: int, feature: str, amount: int = 1) -> None:
             "translate": "balance_translate_req",
             "actions": "balance_extract_req",
             "tts": "balance_tts_req",
+            "image": "balance_image_req",
         }.get(feature)
-        
+
         if not column:
             return
-            
+
         await db.execute(
             f"UPDATE users SET {column} = MAX(0, {column} - ?), updated_at = datetime('now') WHERE user_id = ?",
             (amount, user_id),
@@ -256,11 +258,12 @@ async def add_balance(user_id: int, feature: str, amount: int) -> bool:
             "translate": "balance_translate_req",
             "actions": "balance_extract_req",
             "tts": "balance_tts_req",
+            "image": "balance_image_req",
         }.get(feature)
-        
+
         if not column:
             return False
-            
+
         cur = await db.execute(
             f"UPDATE users SET {column} = {column} + ?, updated_at = datetime('now') WHERE user_id = ?",
             (amount, user_id),
@@ -275,11 +278,12 @@ async def reset_all_monthly_balances() -> int:
         cur = await db.execute(
             """
             UPDATE users SET
-                balance_transcribe_sec = 3600,
-                balance_summarize_req  = 20,
-                balance_translate_req  = 20,
-                balance_extract_req    = 20,
-                balance_tts_req        = 100,
+                balance_transcribe_sec = 5400,
+                balance_summarize_req  = 30,
+                balance_translate_req  = 30,
+                balance_extract_req    = 30,
+                balance_tts_req        = 150,
+                balance_image_req      = 15,
                 updated_at             = datetime('now')
             """
         )

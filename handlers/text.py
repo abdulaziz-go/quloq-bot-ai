@@ -70,6 +70,90 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             reply_markup=keyboard,
             reply_to_message_id=message.message_id
         )
+    elif state == "waiting_for_image_prompt":
+        # Clear the state immediately so a failure doesn't trap the user
+        context.user_data["state"] = None
+
+        # Enforce prompt length constraint (2,000 characters)
+        if len(text) > 2000:
+            await message.reply_text(
+                get_text("err_too_long_image_prompt", lang),
+                parse_mode="MarkdownV2"
+            )
+            return
+
+        from database.users import check_balance, deduct_balance, log_usage
+        if not await check_balance(user.id, "image"):
+            await message.reply_text(
+                get_text("limit_reached", lang, feature="Image Generation"),
+                parse_mode="MarkdownV2",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton(get_text("btn_buy_more", lang), callback_data="buy_menu:image")
+                ]])
+            )
+            return
+
+        status_msg = await message.reply_text(
+            get_text("generating_image", lang).replace("\\.", "."),
+            reply_to_message_id=message.message_id
+        )
+
+        try:
+            import io
+            from services.image_gen import generate_image
+
+            result = await generate_image(text)
+
+            ext = "jpg" if "jpeg" in result.mime_type else "png"
+            photo = io.BytesIO(result.image_bytes)
+            photo.name = f"image.{ext}"
+
+            await message.reply_photo(
+                photo=photo,
+                caption=get_text("image_success", lang),
+                parse_mode="MarkdownV2",
+                reply_to_message_id=message.message_id,
+                # Generous timeouts — generated PNGs can be 1–3 MB and slow to upload.
+                write_timeout=120,
+                read_timeout=60,
+                connect_timeout=30,
+            )
+
+            # Only charge once the image has actually been delivered.
+            await log_usage(
+                user.id,
+                "image",
+                tokens=result.tokens,
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+            )
+            await deduct_balance(user.id, "image")
+
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+
+        except RuntimeError:
+            # Model returned no image (e.g. safety filter) — not charged.
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+            await message.reply_text(
+                get_text("err_no_image", lang),
+                parse_mode="MarkdownV2"
+            )
+        except Exception as e:
+            logger.exception("Image generation failed: %s", e)
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+            await message.reply_text(
+                get_text("error_generic", lang),
+                parse_mode="MarkdownV2"
+            )
     else:
         # User sent generic text. Guide them to the /tts command
         tips = {
