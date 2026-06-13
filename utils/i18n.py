@@ -24,7 +24,7 @@ STRINGS = {
         "choose_target_lang": "🌐 *Choose target language for translation:*",
         "error_generic": "❌ *An error occurred\\. Please try again later\\.*",
         "instructions": "🚀 *How to use the bot:*\n\n1️⃣ Send any voice message or audio file to transcribe\\.\n2️⃣ Use the buttons below the text to summarize, extract tasks, or translate\\.\n3️⃣ Send /tts command to generate professional voiceovers\\!\n4️⃣ Send /image command to generate AI images from text\\!\n5️⃣ Or send a photo with a caption to edit it with AI\\!",
-        "limit_reached": "⚠️ *Limit Reached\\!*\n\nYou have run out of credits for *{feature}*\\.\n\n👇 *Choose a plan below to top up your balance:*",
+        "limit_reached": "⚠️ *Limit Reached\\!*\n\nYou have run out of credits for *{feature}*\\.\n\n👇 *Top up below — or invite friends and you BOTH get free credits\\!*",
         "btn_buy_more": "💳 Buy Credits",
         "buy_request_sent": "📨 *Request Sent\\!*\n\nYour request for *{plan}* has been sent to our team\\. We will contact you shortly to complete the payment and activate your credits\\.",
         "err_too_long_audio": "❌ *Audio too long\\!*\n\nMaximum duration per message is *20 minutes*\\. Please send shorter voice notes\\.",
@@ -66,6 +66,13 @@ STRINGS = {
         "err_no_image": "❌ *Could not generate an image for that request\\.*\n\nIt may have been blocked\\. Please try a different description\\.",
         "err_too_long_image_prompt": "❌ *Description too long\\!*\n\nMaximum allowed length is *2,000 characters*\\.",
         "buy_menu_image": "🎨 *AI Image Generation Plans*\n\n• 10 ta — 7 000 so'm\n• 50 ta — 28 000 so'm\n• 150 ta — 70 000 so'm",
+
+        # Referral / Invite friends
+        "btn_invite_friends": "🎁 Invite friends",
+        "referral_share_text": "🎙🎨 Try this AI bot — voice-to-text, image generation & editing, and more! Join with my link and we both get free credits:",
+        "referral_invite_full": "🎁 *Invite friends & earn free credits\\!*\n\nShare your personal link below\\. When a friend joins through it, *you BOTH* receive:\n\n• 🎙 30 min voice transcription\n• 🎨 10 images\n• 📝 10 summaries\n• 🌐 10 translations\n• 📌 10 task extractions\n• 🔊 10 voiceovers\n\n🔗 Your personal link:\n`{link}`",
+        "referral_reward_earned": "🎉 *Great news\\!* Your friend *{friend}* just joined through your link\\!\n\n🎁 You both received:\n• 🎙 30 min voice transcription\n• 🎨 10 images\n• 📝 10 summaries\n• 🌐 10 translations\n• 📌 10 task extractions\n• 🔊 10 voiceovers\n\nKeep inviting to earn even more\\! 🚀",
+        "referral_welcome_bonus": "🎁 *Welcome bonus\\!*\n\nA friend invited you, so you received extra free credits:\n• 🎙 30 min voice transcription\n• 🎨 10 images\n• 📝 10 summaries\n• 🌐 10 translations\n• 📌 10 task extractions\n• 🔊 10 voiceovers\n\nEnjoy\\! 🎉",
     },
     "uz": {
         "welcome": "👋 *VoiceScribe AI\\-ga xush kelibsiz\\!*\n\nMen dunyodagi eng ilg'or ovozli yordamchiman\\. Men quyidagi ishlarni bajara olaman:\n\n1️⃣ Ovozli xabarni matnga aylantirish\n2️⃣ Matnni xulosa qilish\n3️⃣ Muhim vazifalarni ajratib olish\n4️⃣ Matnni ovozga aylantirish \\(Ovoz yaratish\\)\n5️⃣ AI yordamida rasm yaratish va tahrirlash \\(Nano Banana\\)\n\n👇 *Boshlash uchun tilni tanlang:*",
@@ -84,7 +91,7 @@ STRINGS = {
         "choose_target_lang": "🌐 *Tarjima qilish uchun tilni tanlang:*",
         "error_generic": "❌ *Xatolik yuz berdi\\. Iltimos, keyinroq urinib ko'ring\\.*",
         "instructions": "🚀 *Botdan foydalanish:*\n\n1️⃣ Istalgan ovozli xabar yoki audio faylni yuboring\\.\n2️⃣ Matn tagidagi tugmalar orqali xulosa qiling, vazifalarni ajrating yoki tarjima qiling\\.\n3️⃣ Professional ovozlar yaratish uchun /tts buyrug'ini yuboring\\!\n4️⃣ Matndan AI rasm yaratish uchun /image buyrug'ini yuboring\\!\n5️⃣ Yoki rasmni izoh bilan yuboring — uni AI tahrirlab beradi\\!",
-        "limit_reached": "⚠️ *Limitga yetdingiz\\!*\n\nSizda *{feature}* uchun limit tugadi\\.\n\n👇 *Balansni to'ldirish uchun tarifni tanlang:*",
+        "limit_reached": "⚠️ *Limitga yetdingiz\\!*\n\nSizda *{feature}* uchun limit tugadi\\.\n\n👇 *To'ldiring — yoki do'st taklif qiling, IKKOVINGIZ ham bepul limit olasiz\\!*",
         "btn_buy_more": "💳 Limit sotib olish",
         "buy_request_sent": "📨 *So'rov yuborildi\\!*",
         "admin_buy_request": "🚨 *YANGI SOTIB OLISH SO'ROVI*\n\n👤 *Foydalanuvchi:* {name}\n🆔 *ID:* `{user_id}`\n🏷 *Username:* @{username}\n📦 *Plan:* {plan}\n\nLimit qo'shish uchun:\n`/set_balance {user_id} {feature} {amount}`",
@@ -126,6 +133,13 @@ STRINGS = {
         "err_no_image": "❌ *Ushbu so'rov uchun rasm yaratib bo'lmadi\\.*\n\nU bloklangan bo'lishi mumkin\\. Iltimos, boshqacha tasvirlab ko'ring\\.",
         "err_too_long_image_prompt": "❌ *Tavsif juda uzun\\!*\n\nMaksimal ruxsat etilgan uzunlik *2,000 belgi*\\.",
         "buy_menu_image": "🎨 *AI Rasm yaratish tariflari*\n\n• 10 ta — 7 000 so'm\n• 50 ta — 28 000 so'm\n• 150 ta — 70 000 so'm",
+
+        # Referral / Do'st taklif qilish
+        "btn_invite_friends": "🎁 Do'stlarni taklif qilish",
+        "referral_share_text": "🎙🎨 Bu AI botni sinab ko'ring — ovozdan matn, rasm yaratish va tahrirlash va boshqalar! Havolam orqali qo'shiling, ikkalamiz ham bepul limit olamiz:",
+        "referral_invite_full": "🎁 *Do'st taklif qiling va bepul limit oling\\!*\n\nQuyidagi shaxsiy havolangizni ulashing\\. Do'stingiz shu havola orqali qo'shilsa, *IKKOVINGIZ* ham olasiz:\n\n• 🎙 30 daqiqa ovozdan matn\n• 🎨 10 ta rasm\n• 📝 10 ta xulosa\n• 🌐 10 ta tarjima\n• 📌 10 ta vazifa ajratish\n• 🔊 10 ta ovoz yaratish\n\n🔗 Shaxsiy havolangiz:\n`{link}`",
+        "referral_reward_earned": "🎉 *Ajoyib xabar\\!* Do'stingiz *{friend}* havolangiz orqali qo'shildi\\!\n\n🎁 Ikkovingiz ham oldingiz:\n• 🎙 30 daqiqa ovozdan matn\n• 🎨 10 ta rasm\n• 📝 10 ta xulosa\n• 🌐 10 ta tarjima\n• 📌 10 ta vazifa ajratish\n• 🔊 10 ta ovoz yaratish\n\nKo'proq olish uchun taklif qilishda davom eting\\! 🚀",
+        "referral_welcome_bonus": "🎁 *Xush kelibsiz sovg'asi\\!*\n\nDo'stingiz sizni taklif qildi, shuning uchun qo'shimcha bepul limit oldingiz:\n• 🎙 30 daqiqa ovozdan matn\n• 🎨 10 ta rasm\n• 📝 10 ta xulosa\n• 🌐 10 ta tarjima\n• 📌 10 ta vazifa ajratish\n• 🔊 10 ta ovoz yaratish\n\nYoqimli foydalanish\\! 🎉",
     },
     "ru": {
         "welcome": "👋 *Добро пожаловать в VoiceScribe AI\\!*\n\nЯ самый продвинутый голосовой помощник\\. Вот что я умею делать:\n\n1️⃣ Преобразовывать голосовые сообщения в текст\n2️⃣ Делать краткое изложение текстов\n3️⃣ Выделять важные задачи из текста\n4️⃣ Преобразовывать текст в речь \\(Озвучка\\)\n5️⃣ Создавать и редактировать изображения с AI \\(Nano Banana\\)\n\n👇 *Выберите язык для начала:*",
@@ -144,7 +158,7 @@ STRINGS = {
         "choose_target_lang": "🌐 *Выберите язык для перевода:*",
         "error_generic": "❌ *Произошла ошибка\\. Пожалуйста, попробуйте позже\\.*",
         "instructions": "🚀 *Как пользоваться ботом:*\n\n1️⃣ Отправьте любое голосовое или аудиосообщение\\.\n2️⃣ Дождитесь расшифровки\\.\n3️⃣ Используйте кнопки под текстом для пересказа, задач или перевода\\.\n4️⃣ Отправьте команду /tts для профессиональной озвучки текста\\!\n5️⃣ Отправьте команду /image для создания AI\\-изображений из текста\\!\n6️⃣ Или отправьте фото с подписью — AI отредактирует его\\!",
-        "limit_reached": "⚠️ *Лимит исчерпан\\!*",
+        "limit_reached": "⚠️ *Лимит исчерпан\\!*\n\nКредиты для *{feature}* закончились\\.\n\n👇 *Пополните — или пригласите друга, и вы ОБА получите бесплатные кредиты\\!*",
         "btn_buy_more": "💳 Купить лимиты",
         "buy_request_sent": "📨 *Запрос отправлен\\!*",
         "admin_buy_request": "🚨 *НОВЫЙ ЗАПРОС НА ПОКУПКУ*\n\n👤 *Пользователь:* {name}\n🆔 *ID:* `{user_id}`\n🏷 *Username:* @{username}\n📦 *План:* {plan}\n\nЧтобы выдать лимиты, используйте:\n`/set_balance {user_id} {feature} {amount}`",
@@ -186,6 +200,13 @@ STRINGS = {
         "err_no_image": "❌ *Не удалось создать изображение по этому запросу\\.*\n\nВозможно, оно было заблокировано\\. Попробуйте другое описание\\.",
         "err_too_long_image_prompt": "❌ *Описание слишком длинное\\!*\n\nМаксимально допустимая длина — *2,000 символов*\\.",
         "buy_menu_image": "🎨 *Тарифы на генерацию изображений*\n\n• 10 шт — 7 000 сум\n• 50 шт — 28 000 сум\n• 150 шт — 70 000 сум",
+
+        # Referral / Пригласить друзей
+        "btn_invite_friends": "🎁 Пригласить друзей",
+        "referral_share_text": "🎙🎨 Попробуй этого AI-бота — голос в текст, генерация и редактирование изображений и многое другое! Заходи по моей ссылке, и мы оба получим бесплатные кредиты:",
+        "referral_invite_full": "🎁 *Приглашайте друзей и получайте бесплатные кредиты\\!*\n\nПоделитесь своей персональной ссылкой ниже\\. Когда друг присоединится по ней, *ВЫ ОБА* получите:\n\n• 🎙 30 мин расшифровки голоса\n• 🎨 10 изображений\n• 📝 10 пересказов\n• 🌐 10 переводов\n• 📌 10 выделений задач\n• 🔊 10 озвучек\n\n🔗 Ваша персональная ссылка:\n`{link}`",
+        "referral_reward_earned": "🎉 *Отличная новость\\!* Ваш друг *{friend}* присоединился по вашей ссылке\\!\n\n🎁 Вы оба получили:\n• 🎙 30 мин расшифровки голоса\n• 🎨 10 изображений\n• 📝 10 пересказов\n• 🌐 10 переводов\n• 📌 10 выделений задач\n• 🔊 10 озвучек\n\nПриглашайте ещё, чтобы получить больше\\! 🚀",
+        "referral_welcome_bonus": "🎁 *Приветственный бонус\\!*\n\nВас пригласил друг, поэтому вы получили дополнительные бесплатные кредиты:\n• 🎙 30 мин расшифровки голоса\n• 🎨 10 изображений\n• 📝 10 пересказов\n• 🌐 10 переводов\n• 📌 10 выделений задач\n• 🔊 10 озвучек\n\nПриятного пользования\\! 🎉",
     },
 }
 

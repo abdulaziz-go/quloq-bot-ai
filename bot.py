@@ -52,6 +52,7 @@ from handlers.commands import (
     cmd_db_dump,
     cmd_tts,
     cmd_image,
+    cmd_invite,
 )
 from handlers.voice import handle_voice
 from handlers.text import handle_text
@@ -113,6 +114,7 @@ async def post_init(application: Application) -> None:
         BotCommand("status", "👤 Check your plan & language"),
         BotCommand("tts",    "🔊 Convert text to speech"),
         BotCommand("image",  "🎨 Generate an image from text"),
+        BotCommand("invite", "🎁 Invite friends & earn free credits"),
     ])
     
     # Show admin commands ONLY to admins in their menu
@@ -123,6 +125,7 @@ async def post_init(application: Application) -> None:
         BotCommand("buy",       "💳 Balance & Buy Credits"),
         BotCommand("tts",       "🔊 Convert text to speech"),
         BotCommand("image",     "🎨 Generate an image from text"),
+        BotCommand("invite",    "🎁 Invite friends & earn free credits"),
         BotCommand("analytics", "📊 [Admin] View usage statistics"),
         BotCommand("users",     "👥 [Admin] View total users"),
         BotCommand("user",      "🔍 [Admin] Search for a user"),
@@ -156,6 +159,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("status", cmd_buy))
     app.add_handler(CommandHandler("tts",    cmd_tts))
     app.add_handler(CommandHandler("image",  cmd_image))
+    app.add_handler(CommandHandler("invite", cmd_invite))
     app.add_handler(CommandHandler("set_balance", cmd_set_balance))
     app.add_handler(CommandHandler("analytics", cmd_analytics))
     app.add_handler(CommandHandler("users", cmd_users))

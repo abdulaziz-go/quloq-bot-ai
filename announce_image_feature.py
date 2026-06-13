@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 _FLAG_KEY = "image_feature_announced_v3"
 
 # Starting image credits gifted to every existing user (not shown in the message).
-_FREE_IMAGE_CREDITS = 15
+_FREE_IMAGE_CREDITS = 30
 
 # Prompt used to render the eye-catching promo image attached to the broadcast.
 _PROMO_PROMPT = (

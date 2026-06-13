@@ -91,30 +91,32 @@ _MIME_TYPES: dict[str, str] = {
 }
 
 _TRANSCRIBE_PROMPT = """\
-Transcribe the audio message verbatim. Every word the speaker says must appear — no paraphrasing, no omissions, no "cleaning up" of speech.
+You are a strict, literal speech-to-text transcriber. Write down EXACTLY what is spoken in the audio — nothing more, nothing less.
 
-PRESERVE SPOKEN STYLE:
-- Keep ALL filler words and discourse markers exactly as spoken (e.g., "koroche", "prosto", "lish", "kak", "no", "nu", "vot", "haligi", "yani"). Do NOT drop them, do NOT normalize them to literary forms.
-- Keep colloquial/spoken pronunciations as the speaker said them (e.g., "to'g'irlashim" not "to'g'rilashim" if that is what was said; "prosto" not "prosta"; "bo'laverardi" not "bo'laveradi"). Match what you actually hear.
-- Keep code-switched words (Russian inside Uzbek, etc.) in their spoken form. Transliterate Russian words into Latin script using the same script as the surrounding language.
-- Do NOT add words. Do NOT rephrase. Do NOT summarize. Do NOT correct grammar.
+═══ ABSOLUTE RULES (these override everything else) ═══
+1. Transcribe ONLY words that are actually and clearly spoken in THIS audio.
+2. NEVER invent, guess, complete, predict, or "improve" words. If a word is unclear, write only the part you can clearly hear and nothing else.
+3. NEVER add anything that was not spoken — no greetings, no goodbyes, no "thank you", no titles, no commentary, no filler you did not actually hear.
+4. Do NOT paraphrase, do NOT summarize, do NOT translate, do NOT correct grammar, do NOT change word order.
+5. If the audio is silent, contains only background noise or music, or is completely unintelligible, return an EMPTY string "" for "text". Never fill an empty/unclear recording with made-up content.
+6. Do NOT repeat words or phrases more times than they are actually said.
 
-PUNCTUATION & FORMATTING:
-- Add sentence-ending punctuation (. ? !) at natural sentence boundaries.
-- Add commas at natural pauses and clause boundaries.
+═══ FAITHFULNESS TO THE SPEAKER ═══
+- Keep filler words, hesitations, false starts, and repetitions exactly as spoken.
+- Keep colloquial and non-standard pronunciations exactly as heard — do NOT normalize them to standard/literary forms.
+- Keep code-switched words (e.g. Russian words inside Uzbek speech) in their spoken form, written in the script of the surrounding language.
+
+═══ PUNCTUATION (formatting only — must NEVER change or add words) ═══
+- Add basic sentence punctuation (. ? !) and commas at natural pauses.
 - Capitalize the first letter of each sentence.
-- Use guillemets «» around speech the speaker is quoting from themselves or others (e.g., «Oldingidek vnimaniya qiling»). Use regular quotes "" only if guillemets are not appropriate for the language.
-- Use an em-dash or hyphen-connector where the speaker chains clauses tightly (e.g., "aytyapman-u", "kerak-ku").
-- Break the transcription into PARAGRAPHS at natural topic shifts or long pauses. Do NOT return one giant wall of text — a 30+ second monologue should typically be 2–4 paragraphs.
+- Split long speech into paragraphs using \\n\\n at clear topic shifts or long pauses.
 
-OUTPUT:
-Return ONLY a valid JSON object with exactly these two fields, no markdown fences, no explanation:
+═══ OUTPUT ═══
+Return ONLY a valid JSON object, with no markdown fences and no explanation:
 {
-  "text": "<full verbatim transcription with punctuation and paragraph breaks>",
-  "language": "<detected language in English, e.g. English, Russian, Uzbek, Arabic>"
+  "text": "<verbatim transcription, or \\"\\" if nothing intelligible is spoken>",
+  "language": "<detected spoken language in English, e.g. English, Russian, Uzbek; \\"\\" if no speech>"
 }
-
-In the JSON string, represent paragraph breaks as \\n\\n (two newline characters).
 """
 
 
@@ -143,6 +145,11 @@ def _transcribe_sync(audio_bytes: bytes, mime: str):
         ],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
+            # Deterministic, non-creative decoding — the single biggest lever
+            # against the model inventing words that were never spoken.
+            temperature=0.0,
+            top_p=1.0,
+            top_k=1,
         ),
     )
 

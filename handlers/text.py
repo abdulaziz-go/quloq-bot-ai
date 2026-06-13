@@ -83,13 +83,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             return
 
         from database.users import check_balance, deduct_balance, log_usage
+        from utils.referral import limit_keyboard
         if not await check_balance(user.id, "image"):
             await message.reply_text(
                 get_text("limit_reached", lang, feature="Image Generation"),
                 parse_mode="MarkdownV2",
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton(get_text("btn_buy_more", lang), callback_data="buy_menu:image")
-                ]])
+                reply_markup=limit_keyboard("image", user.id, context.bot.username, lang)
             )
             return
 

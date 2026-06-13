@@ -21,8 +21,9 @@ CREATE TABLE IF NOT EXISTS users (
     balance_translate_req  INTEGER DEFAULT 30,
     balance_extract_req    INTEGER DEFAULT 30,
     balance_tts_req        INTEGER DEFAULT 150,
-    balance_image_req      INTEGER DEFAULT 15,
+    balance_image_req      INTEGER DEFAULT 30,
     referrer    TEXT DEFAULT '(direct)',
+    referral_credited INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -103,7 +104,8 @@ async def init_db() -> None:
             ("balance_translate_req", "INTEGER DEFAULT 30"),
             ("balance_extract_req", "INTEGER DEFAULT 30"),
             ("balance_tts_req", "INTEGER DEFAULT 150"),
-            ("balance_image_req", "INTEGER DEFAULT 15"),
+            ("balance_image_req", "INTEGER DEFAULT 30"),
+            ("referral_credited", "INTEGER NOT NULL DEFAULT 0"),
         ]
         for col_name, col_def in balance_cols:
             try:

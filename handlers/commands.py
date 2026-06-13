@@ -16,26 +16,36 @@ from database.users import (
 from utils.decorators import admin_only, subscription_required
 from utils.formatting import DIVIDER, _escape
 from utils.i18n import get_lang_name, get_text
+from utils.referral import limit_keyboard, invite_button, referral_link
 
 logger = logging.getLogger(__name__)
 
 
-@subscription_required
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show language selection on start."""
+    """Show language selection on start, capturing & crediting referrals."""
     user = update.effective_user
     if not user:
         return
 
-    referrer = "(direct)"
-    if context.args:
-        referrer = str(context.args[0])
+    # 1. Capture the referral payload (a numeric inviter user_id) BEFORE the
+    #    channel gate, so it survives the join → verify step.
+    if context.args and str(context.args[0]).isdigit():
+        context.user_data["pending_ref"] = str(context.args[0])
 
-    await get_or_create_user(user.id, user.username, user.first_name, referrer)
+    # 2. Channel membership gate (done manually so step 1 always runs).
+    from utils.membership import is_user_member
+    from utils.decorators import send_join_prompt
+    if not await is_user_member(update, context):
+        await send_join_prompt(update, context)
+        return
+
+    # 3. Ensure the user exists and credit the referral on first join via a link.
+    from utils.referral import ensure_user_and_referral
+    await ensure_user_and_referral(update, context)
 
     # Use 'en' as temporary for the very first welcome if no lang set
     lang = await get_user_language(user.id)
-    
+
     keyboard = InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🇺🇿 O'zbekcha", callback_data="lang:uz"),
@@ -146,9 +156,7 @@ async def cmd_tts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(
             get_text("limit_reached", lang, feature="Text-to-Speech"),
             parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(get_text("btn_buy_more", lang), callback_data="buy_menu:tts")
-            ]])
+            reply_markup=limit_keyboard("tts", user.id, context.bot.username, lang)
         )
         return
 
@@ -177,9 +185,7 @@ async def cmd_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(
             get_text("limit_reached", lang, feature="Image Generation"),
             parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(get_text("btn_buy_more", lang), callback_data="buy_menu:image")
-            ]])
+            reply_markup=limit_keyboard("image", user.id, context.bot.username, lang)
         )
         return
 
@@ -190,6 +196,33 @@ async def cmd_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         get_text("prompt_image_prompt", lang),
         parse_mode="MarkdownV2"
+    )
+
+
+@subscription_required
+async def cmd_invite(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the user's personal referral link and the rewards for inviting friends."""
+    user = update.effective_user
+    if not user:
+        return
+
+    await get_or_create_user(user.id, user.username, user.first_name)
+    lang = await get_user_language(user.id)
+
+    bot_username = context.bot.username
+    link = referral_link(bot_username, user.id)
+
+    # Link is wrapped in a code span inside the i18n string, so pass it raw.
+    text = get_text("referral_invite_full", lang, link=link)
+
+    btn = invite_button(bot_username, user.id, lang)
+    keyboard = InlineKeyboardMarkup([[btn]]) if btn else None
+
+    await update.message.reply_text(
+        text,
+        parse_mode="MarkdownV2",
+        reply_markup=keyboard,
+        disable_web_page_preview=True,
     )
 
 
@@ -246,34 +279,73 @@ async def cmd_set_balance(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 @admin_only
 async def cmd_analytics(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    from datetime import datetime, timedelta
     from database.users import get_daily_summary
-    
-    data = await get_daily_summary()
-    
+
+    # ── Optional date argument: /analytics 12.06.2025 (DD.MM.YYYY) ──
+    target_date = None  # None → today (UZ time)
+    if context.args:
+        raw = context.args[0].strip()
+        parsed = None
+        for fmt in ("%d.%m.%Y", "%d.%m.%y", "%Y-%m-%d", "%d/%m/%Y"):
+            try:
+                parsed = datetime.strptime(raw, fmt)
+                break
+            except ValueError:
+                continue
+        if not parsed:
+            await update.message.reply_text(
+                "❌ Invalid date\\. Use: `/analytics DD.MM.YYYY`\n"
+                "Example: `/analytics 12.06.2025`",
+                parse_mode="MarkdownV2",
+            )
+            return
+        target_date = parsed.strftime("%Y-%m-%d")
+
+    data = await get_daily_summary(target_date)
+
     def format_tokens(n: int) -> str:
         if n >= 1_000_000:
-            val = n / 1_000_000
-            return f"{val:.2f}M"
+            return f"{n / 1_000_000:.2f}M"
         elif n >= 1000:
-            val = n / 1000
-            return f"{val:.1f}K"
+            return f"{n / 1000:.1f}K"
         return str(n)
-        
+
     total_sec = data["total_audio_sec"]
-    minutes = int(total_sec // 60)
-    seconds = int(total_sec % 60)
-    audio_length_str = f"{minutes}m {seconds}s"
-    
-    total_tokens = data["input_tokens"] + data["output_tokens"]
+    audio_length_str = f"{int(total_sec // 60)}m {int(total_sec % 60)}s"
+
+    # ── Pricing ──
+    # Text/audio (Gemini text models): input $1.0/1M, output $2.5/1M.
     input_cost = (data["input_tokens"] / 1_000_000.0) * 1.0
     output_cost = (data["output_tokens"] / 1_000_000.0) * 2.5
-    total_cost = input_cost + output_cost
-    
-    from datetime import datetime, timedelta
-    uz_now = datetime.utcnow() + timedelta(hours=5)
-    day_num = uz_now.strftime("%d")
-    date_str = f"{uz_now.month}/{uz_now.day}/{uz_now.year}"
-    
+    text_total_tokens = data["input_tokens"] + data["output_tokens"]
+    # Image (Nano Banana): input text $0.30/1M, image output tokens $30/1M.
+    img_input_cost = (data["image_input_tokens"] / 1_000_000.0) * 0.30
+    img_output_cost = (data["image_output_tokens"] / 1_000_000.0) * 30.0
+    image_cost = img_input_cost + img_output_cost
+    grand_cost = input_cost + output_cost + image_cost
+
+    # ── Date header (the actual day the data is for) ──
+    day_dt = datetime.strptime(data["date"], "%Y-%m-%d")
+    date_str = day_dt.strftime("%d.%m.%Y")
+    is_today = data["date"] == (datetime.utcnow() + timedelta(hours=5)).strftime("%Y-%m-%d")
+    day_label = "Today" if is_today else day_dt.strftime("%A")
+
+    # ── Per-feature usage (requests + distinct users) ──
+    feat_meta = {
+        "transcribe": "🎙 Transcription",
+        "summarize":  "📝 Summaries",
+        "translate":  "🌐 Translations",
+        "actions":    "📌 Action Items",
+        "tts":        "🔊 Text-to-Speech",
+        "image":      "🎨 Image Generation",
+    }
+    usage_lines = []
+    for item in data["feature_usage"]:
+        name = feat_meta.get(item["action"], item["action"].capitalize())
+        usage_lines.append(f"• {name}: *{item['requests']}* reqs by *{item['users']}* users")
+    usage_block = "\n".join(usage_lines) if usage_lines else "• No feature usage on this day"
+
     credits_sold_parts = []
     for item in data["credits_sold"]:
         feat = item["feature"]
@@ -295,34 +367,43 @@ async def cmd_analytics(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 "summarize": "Summaries",
                 "translate": "Translations",
                 "actions": "Tasks",
+                "image": "Images",
             }.get(feat, feat.capitalize())
             credits_sold_parts.append(f"{amt} {feat_name}")
-            
+
     credits_sold_str = ", ".join(credits_sold_parts) if credits_sold_parts else "None"
-    
+
     text = (
         f"📊 *DAILY SUMMARY REPORT*\n"
-        f"📅 *Date:* {date_str} (Day {day_num})\n\n"
+        f"📅 *Date:* {date_str} ({day_label})\n\n"
         f"👥 *User Activity*\n"
         f"• New Signups: *{data['new_users']}*\n"
+        f"• Joined via Referral Link: *{data['referral_signups']}*\n"
         f"• Daily Active Users (DAU): *{data['dau']}*\n"
         f"• Total Registered Users: *{data['total_users']}*\n\n"
+        f"📂 *Feature Usage*\n"
+        f"{usage_block}\n\n"
         f"🎙 *Voice Transcription*\n"
         f"• Total Transcriptions: *{data['total_transcriptions']}*\n"
         f"• Total Audio Length: *{audio_length_str}*\n\n"
-        f"🤖 *AI Engine Usage*\n"
+        f"🤖 *AI Text/Audio Engine*\n"
         f"• Input Tokens: *{format_tokens(data['input_tokens'])}* (~${input_cost:.2f})\n"
         f"• Output Tokens: *{format_tokens(data['output_tokens'])}* (~${output_cost:.2f})\n"
-        f"• Total Tokens: *{format_tokens(total_tokens)}* (~${total_cost:.2f})\n\n"
+        f"• Subtotal Tokens: *{format_tokens(text_total_tokens)}* (~${input_cost + output_cost:.2f})\n\n"
+        f"🎨 *Image Generation (Nano Banana)*\n"
+        f"• Images Generated: *{data['image_gens']}* by *{data['image_users']}* users\n"
+        f"• Tokens (in/out): *{format_tokens(data['image_input_tokens'])}* / *{format_tokens(data['image_output_tokens'])}*\n"
+        f"• Image Cost: *~${image_cost:.2f}*\n\n"
         f"🗣 *Text-to-Speech (TTS)*\n"
-        f"• Generations: *{data['tts_gens']}*\n"
+        f"• Generations: *{data['tts_gens']}* by *{data['tts_users']}* users\n"
         f"• Characters Synthesized: *{format_tokens(data['tts_chars'])}*\n\n"
+        f"💰 *Total AI Cost:* ~${grand_cost:.2f}\n\n"
         f"💳 *Financials & Purchases*\n"
         f"• Successful Sales: *{data['purchase_count']}*\n"
         f"• Total Revenue: *{data['revenue_uzs']:,} UZS*\n"
         f"• Credits Distributed: *{credits_sold_str}*"
     )
-    
+
     from utils.formatting import _escape
     escaped_text = _escape(text).replace("\\*", "*")
     

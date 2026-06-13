@@ -52,6 +52,29 @@ def premium_required(feature_name: str):
     return decorator
 
 
+async def send_join_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the 'join the required channel' message with join + verify buttons."""
+    user = update.effective_user
+    if not user:
+        return
+    lang = await get_user_language(user.id)
+
+    channel_handle = config.required_channel.lstrip("@")
+    channel_url = f"https://t.me/{channel_handle}"
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(get_text("btn_join_channel", lang), url=channel_url)],
+        [InlineKeyboardButton(get_text("btn_check_sub", lang), callback_data="check_sub")]
+    ])
+    text = get_text("sub_required", lang, channel=config.required_channel)
+
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
+    else:
+        await update.message.reply_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
+
+
 def subscription_required(func: Callable) -> Callable:
     """Decorator: Gate a handler on channel membership status."""
     @functools.wraps(func)
@@ -63,25 +86,6 @@ def subscription_required(func: Callable) -> Callable:
         if await is_user_member(update, context):
             return await func(update, context, *args, **kwargs)
 
-        # Not a member, show the required channel message
-        lang = await get_user_language(user.id)
-        
-        # Clean up @ from channel name if needed for link
-        channel_handle = config.required_channel.lstrip("@")
-        channel_url = f"https://t.me/{channel_handle}"
-        
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(get_text("btn_join_channel", lang), url=channel_url)],
-            [InlineKeyboardButton(get_text("btn_check_sub", lang), callback_data="check_sub")]
-        ])
-
-        text = get_text("sub_required", lang, channel=config.required_channel)
-        
-        if update.callback_query:
-            await update.callback_query.answer()
-            await update.callback_query.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
-        else:
-            await update.message.reply_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
-            
+        await send_join_prompt(update, context)
         return
     return wrapper

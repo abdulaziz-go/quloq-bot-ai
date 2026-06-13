@@ -272,6 +272,83 @@ async def add_balance(user_id: int, feature: str, amount: int) -> bool:
         return cur.rowcount > 0
 
 
+# ── Referral Program ──────────────────────────────────────────────────────────
+
+# Credits granted to BOTH the inviter and the newly-joined friend on a successful
+# referral. Keep these numbers in sync with the wording in utils/i18n.py.
+REFERRAL_REWARDS = {
+    "transcribe": 1800,  # +30 minutes
+    "image": 10,
+    "summarize": 10,
+    "translate": 10,
+    "actions": 10,
+    "tts": 10,
+}
+
+
+async def user_exists(user_id: int) -> bool:
+    """Return True if a user row already exists."""
+    async with aiosqlite.connect(get_db_path()) as db:
+        async with db.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,)) as cur:
+            return await cur.fetchone() is not None
+
+
+async def process_referral(new_user_id: int, referrer: str | None) -> int | None:
+    """
+    Credit a successful referral, granting rewards to BOTH the inviter and the
+    new friend exactly once. Returns the inviter's user_id if credited, else None.
+
+    Guards: referrer must be a real, existing, different user; and the new user
+    must not have already triggered a referral credit.
+    """
+    if not referrer or not str(referrer).isdigit():
+        return None
+    ref_id = int(referrer)
+    if ref_id == new_user_id:
+        return None
+
+    async with aiosqlite.connect(get_db_path()) as db:
+        # Inviter must be a real, registered user.
+        async with db.execute("SELECT 1 FROM users WHERE user_id = ?", (ref_id,)) as cur:
+            if await cur.fetchone() is None:
+                return None
+
+        # New user must not have credited a referral before (anti-abuse + idempotent).
+        async with db.execute(
+            "SELECT referral_credited FROM users WHERE user_id = ?", (new_user_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            if not row or row[0]:
+                return None
+
+        bonus = """
+            balance_transcribe_sec = balance_transcribe_sec + ?,
+            balance_image_req      = balance_image_req + ?,
+            balance_summarize_req  = balance_summarize_req + ?,
+            balance_translate_req  = balance_translate_req + ?,
+            balance_extract_req    = balance_extract_req + ?,
+            balance_tts_req        = balance_tts_req + ?,
+            updated_at             = datetime('now')
+        """
+        params = (
+            REFERRAL_REWARDS["transcribe"],
+            REFERRAL_REWARDS["image"],
+            REFERRAL_REWARDS["summarize"],
+            REFERRAL_REWARDS["translate"],
+            REFERRAL_REWARDS["actions"],
+            REFERRAL_REWARDS["tts"],
+        )
+        # Reward the inviter…
+        await db.execute(f"UPDATE users SET {bonus} WHERE user_id = ?", (*params, ref_id))
+        # …and the new friend, then mark this referral as credited.
+        await db.execute(
+            f"UPDATE users SET {bonus}, referral_credited = 1 WHERE user_id = ?",
+            (*params, new_user_id),
+        )
+        await db.commit()
+        return ref_id
+
+
 async def reset_all_monthly_balances() -> int:
     """Reset every user's balance columns to monthly defaults. Returns number of rows updated."""
     async with aiosqlite.connect(get_db_path()) as db:
@@ -283,7 +360,7 @@ async def reset_all_monthly_balances() -> int:
                 balance_translate_req  = 30,
                 balance_extract_req    = 30,
                 balance_tts_req        = 150,
-                balance_image_req      = 15,
+                balance_image_req      = 30,
                 updated_at             = datetime('now')
             """
         )
@@ -350,48 +427,69 @@ async def get_usage_stats_data(period: str = "daily") -> list[dict]:
             return [dict(r) for r in reversed(rows)]
 
 
-async def get_daily_summary() -> dict:
-    """Collects comprehensive daily analytics for Uzbekistan Time (UTC+5)."""
+async def get_daily_summary(target_date: str | None = None) -> dict:
+    """Collects comprehensive daily analytics for a given Uzbekistan-Time (UTC+5)
+    calendar day. `target_date` is a 'YYYY-MM-DD' string; defaults to today (UZ time)."""
+    from datetime import datetime, timedelta
+
+    if not target_date:
+        target_date = (datetime.utcnow() + timedelta(hours=5)).strftime("%Y-%m-%d")
+
+    # Single bound parameter reused for every "is this row from `target_date`?" check.
+    D = (target_date,)
+
     async with aiosqlite.connect(get_db_path()) as db:
         db.row_factory = aiosqlite.Row
-        
+
         # 1. New Users
         async with db.execute(
-            "SELECT COUNT(*) as count FROM users WHERE date(created_at, '+5 hours') = date('now', '+5 hours')"
+            "SELECT COUNT(*) as count FROM users WHERE date(created_at, '+5 hours') = ?", D
         ) as cur:
             row = await cur.fetchone()
             new_users = row["count"] if row else 0
 
-        # 2. Referrers
+        # 2. Referrers (breakdown of where the day's signups came from)
         async with db.execute(
             """
-            SELECT referrer, COUNT(*) as count 
-            FROM users 
-            WHERE date(created_at, '+5 hours') = date('now', '+5 hours') 
-            GROUP BY referrer 
+            SELECT referrer, COUNT(*) as count
+            FROM users
+            WHERE date(created_at, '+5 hours') = ?
+            GROUP BY referrer
             ORDER BY count DESC
-            """
+            """, D
         ) as cur:
             rows = await cur.fetchall()
             referrers = [dict(r) for r in rows]
 
+        # 2b. Signups that came specifically through a referral LINK (numeric referrer).
+        async with db.execute(
+            """
+            SELECT COUNT(*) as count
+            FROM users
+            WHERE date(created_at, '+5 hours') = ?
+              AND referrer GLOB '[0-9]*' AND referrer NOT GLOB '*[^0-9]*'
+            """, D
+        ) as cur:
+            row = await cur.fetchone()
+            referral_signups = row["count"] if (row and row["count"]) else 0
+
         # 3. Total Transcriptions
         async with db.execute(
-            "SELECT COUNT(*) as count FROM usage_log WHERE action = 'transcribe' AND date(created_at, '+5 hours') = date('now', '+5 hours')"
+            "SELECT COUNT(*) as count FROM usage_log WHERE action = 'transcribe' AND date(created_at, '+5 hours') = ?", D
         ) as cur:
             row = await cur.fetchone()
             total_transcriptions = row["count"] if row else 0
 
         # 4. Total Audio Length
         async with db.execute(
-            "SELECT SUM(duration_sec) as total_sec FROM usage_log WHERE action = 'transcribe' AND date(created_at, '+5 hours') = date('now', '+5 hours')"
+            "SELECT SUM(duration_sec) as total_sec FROM usage_log WHERE action = 'transcribe' AND date(created_at, '+5 hours') = ?", D
         ) as cur:
             row = await cur.fetchone()
             total_audio_sec = row["total_sec"] if (row and row["total_sec"]) else 0.0
 
         # 5. Daily Active Users (DAU)
         async with db.execute(
-            "SELECT COUNT(DISTINCT user_id) as count FROM usage_log WHERE date(created_at, '+5 hours') = date('now', '+5 hours')"
+            "SELECT COUNT(DISTINCT user_id) as count FROM usage_log WHERE date(created_at, '+5 hours') = ?", D
         ) as cur:
             row = await cur.fetchone()
             dau = row["count"] if row else 0
@@ -401,70 +499,113 @@ async def get_daily_summary() -> dict:
             row = await cur.fetchone()
             total_users = row["count"] if row else 0
 
-        # 7. AI Token Usage
+        # 7. Per-feature usage — requests AND distinct users for each feature that day.
         async with db.execute(
             """
-            SELECT 
-                SUM(CASE WHEN action != 'tts' THEN (CASE WHEN input_tokens > 0 THEN input_tokens ELSE CAST(tokens * 0.8 AS INTEGER) END) ELSE 0 END) as input_t,
-                SUM(CASE WHEN action != 'tts' THEN (CASE WHEN output_tokens > 0 THEN output_tokens ELSE CAST(tokens * 0.2 AS INTEGER) END) ELSE 0 END) as output_t
+            SELECT action,
+                   COUNT(*) as requests,
+                   COUNT(DISTINCT user_id) as users
             FROM usage_log
-            WHERE date(created_at, '+5 hours') = date('now', '+5 hours')
+            WHERE date(created_at, '+5 hours') = ?
+            GROUP BY action
+            ORDER BY requests DESC
+            """, D
+        ) as cur:
+            rows = await cur.fetchall()
+            feature_usage = [dict(r) for r in rows]
+
+        # 8. AI Token Usage — TEXT/AUDIO features only (excludes tts and image).
+        async with db.execute(
             """
+            SELECT
+                SUM(CASE WHEN input_tokens > 0 THEN input_tokens ELSE CAST(tokens * 0.8 AS INTEGER) END) as input_t,
+                SUM(CASE WHEN output_tokens > 0 THEN output_tokens ELSE CAST(tokens * 0.2 AS INTEGER) END) as output_t
+            FROM usage_log
+            WHERE action NOT IN ('tts', 'image') AND date(created_at, '+5 hours') = ?
+            """, D
         ) as cur:
             row = await cur.fetchone()
             input_tokens = row["input_t"] if (row and row["input_t"]) else 0
             output_tokens = row["output_t"] if (row and row["output_t"]) else 0
 
-        # 8. TTS Usage
+        # 9. Image Generation usage (separate — image output tokens are priced differently).
         async with db.execute(
             """
-            SELECT 
+            SELECT
                 COUNT(*) as gens,
+                COUNT(DISTINCT user_id) as users,
+                SUM(input_tokens) as input_t,
+                SUM(output_tokens) as output_t
+            FROM usage_log
+            WHERE action = 'image' AND date(created_at, '+5 hours') = ?
+            """, D
+        ) as cur:
+            row = await cur.fetchone()
+            image_gens = row["gens"] if (row and row["gens"]) else 0
+            image_users = row["users"] if (row and row["users"]) else 0
+            image_input_tokens = row["input_t"] if (row and row["input_t"]) else 0
+            image_output_tokens = row["output_t"] if (row and row["output_t"]) else 0
+
+        # 10. TTS Usage
+        async with db.execute(
+            """
+            SELECT
+                COUNT(*) as gens,
+                COUNT(DISTINCT user_id) as users,
                 SUM(tokens) as chars
             FROM usage_log
-            WHERE action = 'tts' AND date(created_at, '+5 hours') = date('now', '+5 hours')
-            """
+            WHERE action = 'tts' AND date(created_at, '+5 hours') = ?
+            """, D
         ) as cur:
             row = await cur.fetchone()
             tts_gens = row["gens"] if (row and row["gens"]) else 0
+            tts_users = row["users"] if (row and row["users"]) else 0
             tts_chars = row["chars"] if (row and row["chars"]) else 0
 
-        # 9. Purchases
+        # 11. Purchases
         async with db.execute(
             """
-            SELECT 
+            SELECT
                 COUNT(*) as count,
                 SUM(revenue_uzs) as revenue
             FROM purchases
-            WHERE date(created_at, '+5 hours') = date('now', '+5 hours')
-            """
+            WHERE date(created_at, '+5 hours') = ?
+            """, D
         ) as cur:
             row = await cur.fetchone()
             purchase_count = row["count"] if (row and row["count"]) else 0
             revenue_uzs = row["revenue"] if (row and row["revenue"]) else 0
 
-        # 10. Credits Sold details
+        # 12. Credits Sold details
         async with db.execute(
             """
             SELECT feature, SUM(amount) as amount
             FROM purchases
-            WHERE date(created_at, '+5 hours') = date('now', '+5 hours')
+            WHERE date(created_at, '+5 hours') = ?
             GROUP BY feature
-            """
+            """, D
         ) as cur:
             rows = await cur.fetchall()
             credits_sold = [dict(r) for r in rows]
 
         return {
+            "date": target_date,
             "new_users": new_users,
             "referrers": referrers,
+            "referral_signups": referral_signups,
             "total_transcriptions": total_transcriptions,
             "total_audio_sec": total_audio_sec,
             "dau": dau,
             "total_users": total_users,
+            "feature_usage": feature_usage,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
+            "image_gens": image_gens,
+            "image_users": image_users,
+            "image_input_tokens": image_input_tokens,
+            "image_output_tokens": image_output_tokens,
             "tts_gens": tts_gens,
+            "tts_users": tts_users,
             "tts_chars": tts_chars,
             "purchase_count": purchase_count,
             "revenue_uzs": revenue_uzs,

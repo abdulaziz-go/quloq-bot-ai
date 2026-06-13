@@ -23,6 +23,7 @@ from utils.formatting import (
     format_summary,
 )
 from utils.i18n import get_text
+from utils.referral import limit_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -92,9 +93,7 @@ async def callback_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.message.reply_text(
             get_text("limit_reached", lang, feature="Summarization"),
             parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(get_text("btn_buy_more", lang), callback_data="buy_menu:summarize")
-            ]])
+            reply_markup=limit_keyboard("summarize", update.effective_user.id, context.bot.username, lang)
         )
         return
 
@@ -140,9 +139,7 @@ async def callback_actions(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await query.message.reply_text(
             get_text("limit_reached", lang, feature="Action Extraction"),
             parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(get_text("btn_buy_more", lang), callback_data="buy_menu:actions")
-            ]])
+            reply_markup=limit_keyboard("actions", user.id, context.bot.username, lang)
         )
         return
 
@@ -222,9 +219,7 @@ async def callback_translate_exec(update: Update, context: ContextTypes.DEFAULT_
         await query.message.reply_text(
             get_text("limit_reached", lang, feature="Translation"),
             parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(get_text("btn_buy_more", lang), callback_data="buy_menu:translate")
-            ]])
+            reply_markup=limit_keyboard("translate", update.effective_user.id, context.bot.username, lang)
         )
         return
 
@@ -322,9 +317,7 @@ async def callback_tts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await query.message.reply_text(
             get_text("limit_reached", lang, feature="Text-to-Speech"),
             parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(get_text("btn_buy_more", lang), callback_data="buy_menu:tts")
-            ]])
+            reply_markup=limit_keyboard("tts", user.id, context.bot.username, lang)
         )
         await query.answer()
         return
@@ -389,9 +382,7 @@ async def callback_tts_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await query.message.reply_text(
             get_text("limit_reached", lang, feature="Text-to-Speech"),
             parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(get_text("btn_buy_more", lang), callback_data="buy_menu:tts")
-            ]])
+            reply_markup=limit_keyboard("tts", user.id, context.bot.username, lang)
         )
         await query.answer()
         return
@@ -428,9 +419,7 @@ async def callback_tts_select(update: Update, context: ContextTypes.DEFAULT_TYPE
         await query.message.reply_text(
             get_text("limit_reached", lang, feature="Text-to-Speech"),
             parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(get_text("btn_buy_more", lang), callback_data="buy_menu:tts")
-            ]])
+            reply_markup=limit_keyboard("tts", user.id, context.bot.username, lang)
         )
         await query.answer()
         return
@@ -786,6 +775,12 @@ async def callback_check_sub(update: Update, context: ContextTypes.DEFAULT_TYPE)
     from utils.membership import is_user_member
     if await is_user_member(update, context):
         await query.answer("✅ Thank you for joining!", show_alert=True)
+
+        # Now that they're a verified member, register them and credit any
+        # pending referral (rewards both the inviter and this new friend).
+        from utils.referral import ensure_user_and_referral
+        await ensure_user_and_referral(update, context)
+
         # Show the language selection menu (start screen)
         lang = await get_user_language(user.id)
         
